@@ -1,87 +1,140 @@
-# WHO WRITES THIS: Backend developer + ML developer
-# WHAT THIS DOES: POST /chatbot/message - sends user message + history to Gemini.
-#                 Returns LLM response text + profile_complete flag.
-#                 POST /chatbot/reset - clears session state.
+# WHO WRITES THIS: Backend developer
+# WHAT THIS DOES: Unified /api/chat endpoints for the hybrid chatbot.
+#   POST /api/chat         — main chat endpoint (onboarding + career assistant)
+#   GET  /api/chat/history  — paginated chat history for a session
+#   GET  /api/chat/sessions — list user's chat sessions
+#   POST /api/chat/reset    — create a fresh session
+# DEPENDS ON: chatbot_service, auth middleware, Prisma
 
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from prisma import Json
 
-from app.middleware.auth import require_role
-
-from app.services.chatbot_service import (
-    extract_profile,
-    send_to_gemma,
-    validate_profile_schema,
+from app.db.database import get_prisma
+from app.middleware.auth import get_current_user
+from app.schemas.chatbot import (
+    ChatHistoryResponse,
+    ChatMessageItem,
+    ChatRequest,
+    ChatResponse,
+    ChatSessionItem,
+    ChatSessionsResponse,
 )
+from app.services.chatbot_service import process_message
+
+router = APIRouter(prefix="/api/chat", tags=["chatbot"])
 
 
-router = APIRouter(prefix="/chatbot", tags=["chatbot"])
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
-    history: list[ChatMessage] = []
-
-
-class ChatContext(BaseModel):
-    student_profile: dict | None = None
-    applications: dict | None = None
-    top_matches: list[dict] = []
-    skill_gap: dict | None = None
-
-
-class ChatContextRequest(ChatRequest):
-    context: ChatContext | None = None
-
-
-@router.post("/message")
-async def chat(payload: ChatRequest):
-    try:
-        history = [msg.model_dump() for msg in payload.history]
-        llm_text = send_to_gemma(payload.message, history)
-        profile = extract_profile(llm_text)
-        profile_complete = bool(
-            profile
-            and profile.get("profile_complete") is True
-            and validate_profile_schema(profile)
-        )
-        return {
-            "response": llm_text,
-            "profile_complete": profile_complete,
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@router.post("/message-context")
-async def chat_with_context(
-    payload: ChatContextRequest,
-    _: dict = Depends(require_role("student")),
+@router.post("", response_model=ChatResponse)
+async def chat(
+    payload: ChatRequest,
+    current_user: dict = Depends(get_current_user),
 ):
+    """Main chat endpoint. Handles both onboarding and career assistant modes."""
+    user_id = current_user["id"]
     try:
-        history = [msg.model_dump() for msg in payload.history]
-        context_payload = payload.context.model_dump(exclude_none=True) if payload.context else None
-        llm_text = send_to_gemma(payload.message, history, context_payload)
-        profile = extract_profile(llm_text)
-        profile_complete = bool(
-            profile
-            and profile.get("profile_complete") is True
-            and validate_profile_schema(profile)
+        result = await process_message(
+            user_id=user_id,
+            message=payload.message,
+            session_id=payload.session_id,
         )
-        return {
-            "response": llm_text,
-            "profile_complete": profile_complete,
-            "context_used": bool(payload.context),
-        }
+        return ChatResponse(**result)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=f"Chat processing failed: {exc}") from exc
 
 
-@router.post("/reset")
-def reset():
-    return {"ok": True}
+@router.get("/history/{session_id}", response_model=ChatHistoryResponse)
+async def get_chat_history(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Get paginated chat history for a session."""
+    prisma = get_prisma()
+    user_id = current_user["id"]
+
+    session = await prisma.chatbotsession.find_first(
+        where={"id": session_id, "userId": user_id},
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = await prisma.chatmessage.find_many(
+        where={"sessionId": session_id},
+        order={"createdAt": "asc"},
+        skip=skip,
+        take=limit,
+    )
+
+    total = await prisma.chatmessage.count(
+        where={"sessionId": session_id},
+    )
+
+    return ChatHistoryResponse(
+        messages=[
+            ChatMessageItem(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                intent=m.intent,
+                created_at=m.createdAt,
+            )
+            for m in messages
+        ],
+        session_id=session_id,
+        total=total,
+    )
+
+
+@router.get("/sessions", response_model=ChatSessionsResponse)
+async def list_sessions(
+    current_user: dict = Depends(get_current_user),
+):
+    """List all chat sessions for the current user."""
+    prisma = get_prisma()
+    user_id = current_user["id"]
+
+    sessions = await prisma.chatbotsession.find_many(
+        where={"userId": user_id},
+        order={"updatedAt": "desc"},
+    )
+
+    return ChatSessionsResponse(
+        sessions=[
+            ChatSessionItem(
+                id=s.id,
+                mode=s.mode,
+                onboarding_step=s.onboardingStep,
+                is_complete=s.isComplete,
+                created_at=s.createdAt,
+                updated_at=s.updatedAt,
+            )
+            for s in sessions
+        ],
+    )
+
+
+@router.post("/reset", response_model=ChatResponse)
+async def reset_session(
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a fresh chat session."""
+    prisma = get_prisma()
+    user_id = current_user["id"]
+
+    session = await prisma.chatbotsession.create(
+        data={
+            "userId": user_id,
+            "messages": Json([]),
+            "onboardingStep": "GREETING",
+            "mode": "ONBOARDING",
+        },
+    )
+
+    # Send the greeting as the first message
+    result = await process_message(
+        user_id=user_id,
+        message="hi",
+        session_id=session.id,
+    )
+    return ChatResponse(**result)

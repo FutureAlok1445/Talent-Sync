@@ -26,3 +26,4 @@ backend/prisma/__pycache__/
 backend/prisma/*.py
 backend/prisma/*.pyi
 .qodo/
+.agent/

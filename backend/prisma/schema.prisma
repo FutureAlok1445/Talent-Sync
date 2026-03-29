@@ -56,22 +56,25 @@ model User {
 // ─────────────────────────────────────────────
 
 model StudentProfile {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  fullName        String
-  bio             String?
-  college         String?
-  degree          String?
-  branch          String?
-  graduationYear  Int?
-  cgpa            Float?
-  location        String?
-  linkedinUrl     String?
-  githubUrl       String?
-  portfolioUrl    String?
-  resumeText      String?   // Extracted / typed resume text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  fullName            String
+  bio                 String?
+  college             String?
+  degree              String?
+  branch              String?
+  graduationYear      Int?
+  cgpa                Float?
+  location            String?
+  linkedinUrl         String?
+  githubUrl           String?
+  portfolioUrl        String?
+  resumeText          String?       // Extracted / typed resume text
+  preferredRoles      String[]      // e.g. ["Data Analyst", "ML Engineer"]
+  experienceLevel     String?       // "FRESHER" | "INTERN" | "EXPERIENCED"
+  preferredLocations  String[]      // e.g. ["Mumbai", "Remote"]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -235,14 +238,36 @@ model Application {
 model ChatbotSession {
   id              String    @id @default(uuid())
   userId          String
-  messages        Json      // Array of { role: "user"|"assistant", content: string }
-  extractedData   Json?     // Structured JSON extracted by LLM from conversation
+  messages        Json      // Legacy: array of { role, content }. Use chatMessages relation.
+  extractedData   Json?     // Structured JSON extracted from conversation
   isComplete      Boolean   @default(false)  // Profile fully collected?
+  onboardingStep  String    @default("GREETING")  // State machine step
+  mode            String    @default("ONBOARDING") // ONBOARDING | CAREER_ASSISTANT
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatMessages    ChatMessage[]
+}
+
+// ─────────────────────────────────────────────
+// 10b. CHAT MESSAGES (Normalized)
+// ─────────────────────────────────────────────
+
+model ChatMessage {
+  id              String    @id @default(uuid())
+  sessionId       String
+  role            String    // "user" | "assistant" | "system"
+  content         String
+  intent          String?   // Detected intent (for analytics)
+  metadata        Json?     // Match results, SHAP data, etc.
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  session         ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 // ─────────────────────────────────────────────

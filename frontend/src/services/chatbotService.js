@@ -1,41 +1,101 @@
 /*
  * WHO WRITES THIS: Frontend developer
- * WHAT THIS DOES: Send chat message to Gemini-backed chatbot via backend,
- *                 reset chat session
+ * WHAT THIS DOES: Unified chat service using /api/chat endpoints.
+ *                 Handles both onboarding and career assistant modes.
  * DEPENDS ON: api.js
  */
 import apiClient from "./api";
-import { resolveData } from "./mockRuntime";
 
 export const chatbotService = {
-  sendMessage: async (message, history = []) => resolveData({
-    apiCall: async () => {
-      const response = await apiClient.post("/chatbot/message", { message, history });
-      return response?.data || { response: "", profile_complete: false };
-    },
-    mockFile: "students.js",
-    mockExport: "chatbotMockResponse",
-    fallbackValue: {
-      response: "I am currently offline. You can still continue editing your profile manually.",
-      profile_complete: false,
-    },
-  }),
-
-  sendMessageContextual: async (message, history = [], context = null) => {
+  /**
+   * Send a message to the unified chat endpoint.
+   * @param {string} message - User message text
+   * @param {string|null} sessionId - Existing session ID (null for new session)
+   * @returns {Promise<{response: string, session_id: string, mode: string, onboarding_step?: string, profile_complete: boolean, intent?: string}>}
+   */
+  sendMessage: async (message, sessionId = null) => {
     try {
-      const response = await apiClient.post("/chatbot/message-context", { message, history, context });
-      if (response?.data) {
-        return response.data;
+      const payload = { message };
+      if (sessionId) {
+        payload.session_id = sessionId;
       }
-    } catch {
-      // Fall through to the legacy endpoint for compatibility.
-    }
+      const response = await apiClient.post("/api/chat", payload);
+      return response?.data || {
+        response: "No response available.",
+        session_id: null,
+        mode: "ONBOARDING",
+        profile_complete: false,
+      };
+    } catch (error) {
+      const apiError =
+        error?.response?.data?.detail ||
+        error?.message ||
+        null;
 
-    return chatbotService.sendMessage(message, history);
+      if (apiError) {
+        return {
+          response: `Something went wrong while processing your message: ${apiError}`,
+          session_id: sessionId,
+          mode: "ONBOARDING",
+          profile_complete: false,
+        };
+      }
+
+      return {
+        response:
+          "I am currently offline. You can still continue editing your profile manually.",
+        session_id: sessionId,
+        mode: "ONBOARDING",
+        profile_complete: false,
+      };
+    }
   },
 
+  /**
+   * Alias for backward compatibility — same as sendMessage.
+   */
+  sendMessageContextual: async (message, sessionId = null) => {
+    return chatbotService.sendMessage(message, sessionId);
+  },
+
+  /**
+   * Fetch chat history for a specific session.
+   * @param {string} sessionId
+   * @param {number} skip
+   * @param {number} limit
+   */
+  getHistory: async (sessionId, skip = 0, limit = 50) => {
+    try {
+      const response = await apiClient.get(
+        `/api/chat/history/${sessionId}?skip=${skip}&limit=${limit}`
+      );
+      return response?.data || { messages: [], total: 0 };
+    } catch {
+      return { messages: [], total: 0 };
+    }
+  },
+
+  /**
+   * List all chat sessions for the current user.
+   */
+  getSessions: async () => {
+    try {
+      const response = await apiClient.get("/api/chat/sessions");
+      return response?.data?.sessions || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Create a fresh chat session (resets onboarding).
+   */
   resetSession: async () => {
-    const response = await apiClient.post("/chatbot/reset");
-    return response?.data;
+    try {
+      const response = await apiClient.post("/api/chat/reset");
+      return response?.data || null;
+    } catch {
+      return null;
+    }
   },
 };
