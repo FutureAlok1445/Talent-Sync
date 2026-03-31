@@ -1,39 +1,56 @@
 /*
  * WHO WRITES THIS: Frontend developer
- * WHAT THIS DOES: List jobs, get single job, create job, update job
- * DEPENDS ON: api.js
+ * WHAT THIS DOES: CRUD for job postings via /api/jobs endpoints.
+ * DEPENDS ON: api.js (axios instance with JWT interceptor)
  */
-import apiClient from "./api";
-import { resolveData } from "./mockRuntime";
+import apiClient from './api'
 
 export const jobService = {
-  getAllJobs: async () => resolveData({
-    apiCall: async () => {
-      const response = await apiClient.get("/jobs");
-      return response?.data || [];
-    },
-    mockFile: "jobs.js",
-    mockExport: "jobs",
-    fallbackValue: [],
-  }),
-
-  getJobById: async (id) => resolveData({
-    apiCall: async () => {
-      const response = await apiClient.get(`/jobs/${id}`);
-      return response?.data || null;
-    },
-    mockFile: "jobs.js",
-    mockExport: "jobById",
-    fallbackValue: null,
-  }),
-
-  createJob: async (data) => {
-    const response = await apiClient.post("/jobs", data);
-    return response?.data;
+  createJob: async (payload) => {
+    const res = await apiClient.post('/api/jobs', payload)
+    return res.data
   },
 
-  updateJob: async (id, data) => {
-    const response = await apiClient.put(`/jobs/${id}`, data);
-    return response?.data;
+  getJobs: async (filters = {}) => {
+    const params = new URLSearchParams()
+
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val == null || val === '') return
+      if (Array.isArray(val)) {
+        val.forEach((v) => params.append(key, v))
+      } else {
+        params.set(key, val)
+      }
+    })
+
+    const res = await apiClient.get('/api/jobs', { params })
+    return res.data
   },
-};
+
+  getJobById: async (id) => {
+    const res = await apiClient.get(`/api/jobs/${id}`)
+    return res.data
+  },
+
+  getMyJobs: async (filters = {}) => {
+    const params = new URLSearchParams()
+
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val == null || val === '') return
+      params.set(key, String(val))
+    })
+
+    const res = await apiClient.get('/api/jobs/recruiter/my-jobs', { params })
+    return res.data
+  },
+
+  updateJob: async (id, payload) => {
+    const res = await apiClient.patch(`/api/jobs/${id}`, payload)
+    return res.data
+  },
+
+  closeJob: async (id) => {
+    const res = await apiClient.delete(`/api/jobs/${id}`)
+    return res.data
+  },
+}

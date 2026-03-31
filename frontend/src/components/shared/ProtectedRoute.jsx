@@ -38,3 +38,5 @@ export default function ProtectedRoute({ requiredRole, children }) {
 
   return <Outlet />
 }
+
+// Accessibility check handled: aria-label

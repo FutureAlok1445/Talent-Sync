@@ -27,84 +27,87 @@ export default function Loader() {
     // Lock scroll initially
     document.body.style.overflow = 'hidden';
 
-    const tl = gsap.timeline({
-      onComplete: () => {
-        document.body.style.overflow = '';
-        document.body.classList.add('loaded');
-        window.dispatchEvent(new Event('loader:done'));
-        gsap.to(containerRef.current, { opacity: 0, pointerEvents: 'none', duration: 0.5 });
-      }
+    let ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        onComplete: () => {
+          document.body.style.overflow = '';
+          document.body.classList.add('loaded');
+          window.dispatchEvent(new Event('loader:done'));
+          gsap.to(containerRef.current, { opacity: 0, pointerEvents: 'none', duration: 0.5 });
+        }
+      });
+
+      // Phase 1 (0 to 1000ms)
+      const counterObj = { val: 0 };
+      tl.to(counterObj, {
+        val: 100,
+        duration: 1,
+        ease: 'none',
+        onUpdate: () => {
+          if (counterRef.current) {
+            counterRef.current.innerText = Math.floor(counterObj.val).toString().padStart(3, '0');
+          }
+        }
+      }, 0);
+
+      // Top progress bar (fills 0 to 100% width)
+      tl.to(progressTopRef.current, {
+        scaleX: 1,
+        duration: 1,
+        ease: 'none'
+      }, 0);
+
+      // Stack lines progress bars behind text
+      tl.to(stackBarsRef.current, {
+        scaleX: 1,
+        duration: 1,
+        ease: 'none',
+        stagger: 0.1
+      }, 0);
+      
+      // Stack lines appearing staggered
+      tl.fromTo(stackLinesRef.current, {
+        opacity: 0,
+        x: -10
+      }, {
+        opacity: 1,
+        x: 0,
+        duration: 0.3,
+        stagger: 0.1
+      }, 0);
+
+      // Phase 2 (1000ms to 1600ms)
+      tl.add(() => {
+        setShowMatrix(true);
+        scramble();
+      }, 1);
+
+      // Phase 3 (1600ms to 2200ms)
+      tl.to(bigTextTopRef.current, {
+        clipPath: 'inset(-100% 0 50% 0)',
+        y: '-15vh',
+        duration: 0.7,
+        ease: 'power3.inOut'
+      }, 1.6);
+
+      tl.to(bigTextBottomRef.current, {
+        clipPath: 'inset(50% 0 -100% 0)',
+        y: '15vh',
+        duration: 0.7,
+        ease: 'power3.inOut'
+      }, 1.6);
+
+      tl.fromTo(yellowBarRef.current, {
+        x: '-100vw'
+      }, {
+        x: '100vw',
+        duration: 0.5,
+        ease: 'power4.in'
+      }, 1.6);
     });
 
-    // Phase 1 (0 to 1000ms)
-    const counterObj = { val: 0 };
-    tl.to(counterObj, {
-      val: 100,
-      duration: 1,
-      ease: 'none',
-      onUpdate: () => {
-        if (counterRef.current) {
-          counterRef.current.innerText = Math.floor(counterObj.val).toString().padStart(3, '0');
-        }
-      }
-    }, 0);
-
-    // Top progress bar (fills 0 to 100% width)
-    tl.to(progressTopRef.current, {
-      scaleX: 1,
-      duration: 1,
-      ease: 'none'
-    }, 0);
-
-    // Stack lines progress bars behind text
-    tl.to(stackBarsRef.current, {
-      scaleX: 1,
-      duration: 1,
-      ease: 'none',
-      stagger: 0.1
-    }, 0);
-    
-    // Stack lines appearing staggered
-    tl.fromTo(stackLinesRef.current, {
-      opacity: 0,
-      x: -10
-    }, {
-      opacity: 1,
-      x: 0,
-      duration: 0.3,
-      stagger: 0.1
-    }, 0);
-
-    // Phase 2 (1000ms to 1600ms)
-    tl.add(() => {
-      setShowMatrix(true);
-      scramble();
-    }, 1);
-
-    // Phase 3 (1600ms to 2200ms)
-    tl.to(bigTextTopRef.current, {
-      clipPath: 'inset(-100% 0 50% 0)',
-      y: '-15vh',
-      duration: 0.7,
-      ease: 'power3.inOut'
-    }, 1.6);
-
-    tl.to(bigTextBottomRef.current, {
-      clipPath: 'inset(50% 0 -100% 0)',
-      y: '15vh',
-      duration: 0.7,
-      ease: 'power3.inOut'
-    }, 1.6);
-
-    tl.fromTo(yellowBarRef.current, {
-      x: '-100vw'
-    }, {
-      x: '100vw',
-      duration: 0.5,
-      ease: 'power4.in'
-    }, 1.6);
-
     return () => {
+      ctx.revert();
       document.body.style.overflow = '';
     };
   }, [scramble]);

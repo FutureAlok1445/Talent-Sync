@@ -1,4 +1,4 @@
-# TalentSync
+# Talent-Sync
 
 TalentSync is an AI-driven internship matching platform with:
 - Backend: FastAPI
