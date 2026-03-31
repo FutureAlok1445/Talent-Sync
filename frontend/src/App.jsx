@@ -26,18 +26,21 @@ export default function App() {
 
   useEffect(() => {
     // Initial UI Setup for Scroll Progress (GSAP ScrollTrigger)
-    gsap.to("#scroll-progress", {
-      scaleX: 1,
-      ease: "none",
-      scrollTrigger: { fastScrollEnd: true, preventOverlaps: true, 
-        trigger: document.body,
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.3
-      }
+    // requestAnimationFrame is handled under the hood by GSAP/Lenis
+    let ctx = gsap.context(() => {
+      gsap.to("#scroll-progress", {
+        scaleX: 1,
+        ease: "none",
+        scrollTrigger: { fastScrollEnd: true, preventOverlaps: true, 
+          trigger: document.body,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 0.3
+        }
+      });
     });
 
-    return () => {};
+    return () => ctx.revert();
   }, []);
 
   return (

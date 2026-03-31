@@ -21,6 +21,7 @@ export default function Navbar() {
   ];
 
   useEffect(() => {
+    let ctx = gsap.context(() => {});
     let lastScrollY = 0;
     let ticking = false;
 
@@ -29,16 +30,20 @@ export default function Navbar() {
       if (!ticking) {
         requestAnimationFrame(() => {
           if (lastScrollY > 80) {
-            gsap.to(navRef.current, {
-              backdropFilter: "blur(12px)",
-              backgroundColor: "rgba(10,10,10,0.92)",
-              duration: 0.3, ease: "power2.out"
+            ctx.add(() => {
+              gsap.to(navRef.current, {
+                backdropFilter: "blur(12px)",
+                backgroundColor: "rgba(10,10,10,0.92)",
+                duration: 0.3, ease: "power2.out"
+              });
             });
           } else {
-            gsap.to(navRef.current, {
-              backdropFilter: "blur(0px)",
-              backgroundColor: "transparent",
-              duration: 0.3
+            ctx.add(() => {
+              gsap.to(navRef.current, {
+                backdropFilter: "blur(0px)",
+                backgroundColor: "transparent",
+                duration: 0.3
+              });
             });
           }
           ticking = false;
@@ -48,22 +53,29 @@ export default function Navbar() {
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      ctx.revert();
+    };
   }, []);
 
   useEffect(() => {
+    let ctx = gsap.context(() => {});
     // Mobile menu animations
     if (mobileMenuOpen) {
-      gsap.fromTo(mobileMenuRef.current, 
-        { x: '100vw' },
-        { x: 0, duration: 0.5, ease: 'power3.out' }
-      );
-      
-      gsap.fromTo(mobileLinksRef.current,
-        { x: 40, opacity: 0 },
-        { x: 0, opacity: 1, duration: 0.4, stagger: 0.07, delay: 0.2, ease: 'power2.out' }
-      );
+      ctx.add(() => {
+        gsap.fromTo(mobileMenuRef.current, 
+          { x: '100vw' },
+          { x: 0, duration: 0.5, ease: 'power3.out' }
+        );
+        
+        gsap.fromTo(mobileLinksRef.current,
+          { x: 40, opacity: 0 },
+          { x: 0, opacity: 1, duration: 0.4, stagger: 0.07, delay: 0.2, ease: 'power2.out' }
+        );
+      });
     }
+    return () => ctx.revert();
   }, [mobileMenuOpen]);
 
   useEffect(() => {
