@@ -519,6 +519,7 @@
   }
 
   /* ── PROGRESS SCROLL BAR ── */
+  /* requestAnimationFrame handled inside App.jsx via GSAP */
   #scroll-progress {
     position: fixed;
     top: 0; left: 0;

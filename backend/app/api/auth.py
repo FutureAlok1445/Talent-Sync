@@ -15,6 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest):
+    req.email = req.email.strip().lower()
     # Check if email is already registered
     existing_user = await prisma.user.find_unique(where={"email": req.email})
     if existing_user:
@@ -81,6 +82,7 @@ async def register(req: RegisterRequest):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest):
+    req.email = req.email.strip().lower()
     user = await prisma.user.find_unique(
         where={"email": req.email},
         include={"studentProfile": True, "recruiterProfile": True}

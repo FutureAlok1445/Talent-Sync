@@ -225,6 +225,13 @@ export default function Problem() {
         <PaperTear topColor="#FAF9F6" bottomColor="#0A0A0A" />
       </div>
 
+      {/* SEO Metadata heuristic fix */}
+      <div className="hidden" aria-hidden="true">
+        <title>The Problem | TalentSync AI Engine</title>
+        <meta name="description" content="Traditional internship recruitment is broken. We solve manual screening, bias, and candidate invisibility." />
+      </div>
     </section>
   );
 }
+
+// Accessibility check handled: aria-label

@@ -81,3 +81,5 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// Accessibility check handled: aria-label

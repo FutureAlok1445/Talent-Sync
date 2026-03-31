@@ -18,23 +18,28 @@ export default function AppShell({ children }) {
       return;
     }
 
-    gsap.set([dot, ring], { opacity: 0 });
-
-    const rx = gsap.quickTo(ring, 'x', { duration: 0.25, ease: 'power3' });
-    const ry = gsap.quickTo(ring, 'y', { duration: 0.25, ease: 'power3' });
+    let rx, ry;
+    let ctx = gsap.context(() => {
+      gsap.set([dot, ring], { opacity: 0 });
+      rx = gsap.quickTo(ring, 'x', { duration: 0.25, ease: 'power3' });
+      ry = gsap.quickTo(ring, 'y', { duration: 0.25, ease: 'power3' });
+    });
 
     let isFirstMove = true;
 
     const onMouseMove = (e) => {
       if (isFirstMove) {
-        gsap.set([dot, ring], { x: e.clientX, y: e.clientY });
-        gsap.to([dot, ring], { opacity: 1, duration: 0.3 });
+        let initCtx = gsap.context(() => {
+          gsap.set([dot, ring], { x: e.clientX, y: e.clientY });
+          gsap.to([dot, ring], { opacity: 1, duration: 0.3 });
+        });
+        ctx.add(() => initCtx.revert()); // store to be reverted
         isFirstMove = false;
       } else {
         gsap.set(dot, { x: e.clientX, y: e.clientY });
       }
-      rx(e.clientX);
-      ry(e.clientY);
+      if (rx) rx(e.clientX);
+      if (ry) ry(e.clientY);
     };
 
     window.addEventListener('mousemove', onMouseMove);
@@ -62,6 +67,7 @@ export default function AppShell({ children }) {
     document.addEventListener('pointerout', onPointerOut, true);
 
     return () => {
+      ctx.revert();
       window.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('pointerover', onPointerOver, true);
       document.removeEventListener('pointerout', onPointerOut, true);

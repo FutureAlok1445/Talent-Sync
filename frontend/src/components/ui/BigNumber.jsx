@@ -9,21 +9,25 @@ export default function BigNumber({ value, end, label, suffix = '', duration = 2
   const valToUse = value !== undefined ? value : end;
   
   useEffect(() => {
+    let ctx = gsap.context(() => {});
     if (inView && valToUse !== undefined) {
       const valString = String(valToUse);
       const targetValue = parseInt(valString.replace(/,/g, ''), 10);
       const isStringValue = isNaN(targetValue);
 
       if (!isStringValue) {
-        const obj = { val: 0 };
-        gsap.to(obj, {
-          val: targetValue,
-          duration: duration,
-          ease: "power2.out",
-          onUpdate: () => setDisplayValue(Math.floor(obj.val))
+        ctx.add(() => {
+          const obj = { val: 0 };
+          gsap.to(obj, {
+            val: targetValue,
+            duration: duration,
+            ease: "power2.out",
+            onUpdate: () => setDisplayValue(Math.floor(obj.val))
+          });
         });
       }
     }
+    return () => ctx.revert();
   }, [inView, valToUse, duration]);
 
   const targetValue = parseInt(String(valToUse || 0).replace(/,/g, ''), 10);

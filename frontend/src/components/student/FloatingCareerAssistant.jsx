@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { GripHorizontal, MessageSquare, Send, X } from 'lucide-react'
-import { applicationService } from '../../services/applicationService'
+import { GripHorizontal, MessageSquare, Send, X, RefreshCw } from 'lucide-react'
 import { chatbotService } from '../../services/chatbotService'
-import { matchService } from '../../services/matchService'
-import { profileService } from '../../services/profileService'
-import { useMatchStore } from '../../store/matchStore'
-import { getSkillGapInsight } from '../../utils/formatters'
 
 const DEFAULT_PROMPTS = [
   'How can I improve my match score?',
@@ -71,42 +66,7 @@ function getStoredPanelSize() {
   }
 }
 
-function normalizeSkills(skills) {
-  return Array.isArray(skills) ? skills.map((item) => String(item || '').trim()).filter(Boolean) : []
-}
 
-function buildPromptSuggestions({ profile, matches, applications, skillGap }) {
-  const prompts = [...DEFAULT_PROMPTS]
-  const profileSkills = normalizeSkills(profile?.skills)
-  const preferredRoles = Array.isArray(profile?.preferredRoles) ? profile.preferredRoles : []
-  const shortlistedCount = (applications || []).filter((item) => String(item?.status || '').toUpperCase() === 'SHORTLISTED').length
-
-  if (skillGap?.skill) {
-    prompts.unshift(`How do I close the ${skillGap.skill} skill gap?`)
-  }
-
-  if (profileSkills.includes('React') && !profileSkills.includes('TypeScript')) {
-    prompts.push('How should I learn TypeScript for frontend roles?')
-  }
-
-  if (profileSkills.includes('Python') && !profileSkills.includes('Java')) {
-    prompts.push('Where can I study Java for backend readiness?')
-  }
-
-  if (preferredRoles.some((role) => String(role).toLowerCase().includes('ml'))) {
-    prompts.push('What should I focus on this month for ML roles?')
-  }
-
-  if (shortlistedCount === 0 && applications?.length) {
-    prompts.push('Why am I not getting shortlisted yet?')
-  }
-
-  if (matches?.length) {
-    prompts.push('Which skills are missing for my top match?')
-  }
-
-  return Array.from(new Set(prompts)).slice(0, MAX_QUICK_ACTIONS)
-}
 
 function formatAssistantContent(content) {
   const raw = String(content || '').trim()
@@ -165,50 +125,17 @@ function formatAssistantContent(content) {
   })
 }
 
-function buildContextPayload({ profile, matches, applications, skillGap }) {
-  return {
-    student_profile: {
-      full_name: profile?.fullName || profile?.name || null,
-      college: profile?.college || null,
-      gpa: profile?.gpa || profile?.cgpa || null,
-      skills: normalizeSkills(profile?.skills),
-      preferred_roles: Array.isArray(profile?.preferredRoles) ? profile.preferredRoles : [],
-      preferred_locations: Array.isArray(profile?.preferredLocations) ? profile.preferredLocations : [],
-    },
-    applications: {
-      total: applications.length,
-      shortlisted: applications.filter((item) => String(item?.status || '').toUpperCase() === 'SHORTLISTED').length,
-      selected: applications.filter((item) => String(item?.status || '').toUpperCase() === 'SELECTED').length,
-    },
-    top_matches: (matches || []).slice(0, 3).map((match) => ({
-      id: match?.id,
-      title: match?.title || match?.roleTitle || null,
-      score: match?.score || match?.finalScore || 0,
-      required_skills: normalizeSkills(match?.requiredSkills),
-      missing_skills: normalizeSkills(match?.missingSkills),
-    })),
-    skill_gap: skillGap
-      ? {
-          skill: skillGap.skill,
-          prevalence_percent: skillGap.prevalencePercent,
-        }
-      : null,
-  }
-}
+const ASSISTANT_SESSION_KEY = 'talentsync:assistant:session'
 
 export default function FloatingCareerAssistant() {
-  const matchStoreMatches = useMatchStore((state) => state.matches)
   const [isOpen, setIsOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(() => (
     typeof window !== 'undefined' ? window.matchMedia(DESKTOP_MEDIA_QUERY).matches : false
   ))
   const [panelSize, setPanelSize] = useState(() => getStoredPanelSize())
   const [loadingContext, setLoadingContext] = useState(false)
-  const [contextData, setContextData] = useState({
-    profile: null,
-    matches: [],
-    applications: [],
-    skillGap: null,
+  const [sessionId, setSessionId] = useState(() => {
+    try { return window.localStorage.getItem(ASSISTANT_SESSION_KEY) || null } catch { return null }
   })
   const [messages, setMessages] = useState([
     {
@@ -333,57 +260,44 @@ export default function FloatingCareerAssistant() {
     syncTextareaHeight()
   }, [input, isOpen, syncTextareaHeight])
 
+  // Load existing session history when panel opens
   useEffect(() => {
-    if (!isOpen) {
-      return
-    }
+    if (!isOpen) return
 
     let active = true
-    const loadContext = async () => {
+    const loadSession = async () => {
+      if (!sessionId) {
+        setLoadingContext(false)
+        return
+      }
       setLoadingContext(true)
-      const [profileResult, applicationsResult, matchesResult] = await Promise.allSettled([
-        profileService.getMyProfile(),
-        applicationService.getMyApplications(),
-        matchStoreMatches?.length ? Promise.resolve(matchStoreMatches) : matchService.getMyMatches(20),
-      ])
-
-      if (!active) {
-        return
-      }
-
-      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null
-      const applications = applicationsResult.status === 'fulfilled' && Array.isArray(applicationsResult.value)
-        ? applicationsResult.value
-        : []
-      const matches = matchesResult.status === 'fulfilled' && Array.isArray(matchesResult.value)
-        ? matchesResult.value
-        : []
-      const skillGap = getSkillGapInsight(matches.slice(0, 3), [])
-
-      setContextData({
-        profile,
-        applications,
-        matches,
-        skillGap,
-      })
-      setLoadingContext(false)
+      try {
+        const history = await chatbotService.getHistory(sessionId)
+        if (active && history?.messages?.length) {
+          setMessages(history.messages.map((m) => ({ role: m.role, content: m.content })))
+        }
+      } catch { /* keep default greeting */ }
+      if (active) setLoadingContext(false)
     }
 
-    loadContext().catch(() => {
-      if (!active) {
-        return
-      }
-      setLoadingContext(false)
-    })
+    loadSession()
+    return () => { active = false }
+  }, [isOpen, sessionId])
 
-    return () => {
-      active = false
+  // Persist session ID
+  useEffect(() => {
+    if (sessionId) {
+      try {
+        window.localStorage.setItem(ASSISTANT_SESSION_KEY, sessionId)
+      } catch (err) {
+        console.error('Failed to save session ID:', err)
+      }
     }
-  }, [isOpen, matchStoreMatches])
+  }, [sessionId])
 
   const suggestions = useMemo(
-    () => buildPromptSuggestions(contextData),
-    [contextData],
+    () => DEFAULT_PROMPTS.slice(0, MAX_QUICK_ACTIONS),
+    [],
   )
 
   const sendMessage = async (rawMessage) => {
@@ -392,19 +306,17 @@ export default function FloatingCareerAssistant() {
       return
     }
 
-    const nextMessages = [...messages, { role: 'user', content: text }]
-    setMessages(nextMessages)
+    setMessages((prev) => [...prev, { role: 'user', content: text }])
     setInput('')
     setRequestError('')
     setIsSending(true)
 
     try {
-      const payloadContext = buildContextPayload(contextData)
-      const response = await chatbotService.sendMessageContextual(
-        text,
-        nextMessages,
-        payloadContext,
-      )
+      const response = await chatbotService.sendMessage(text, sessionId, { forceAssistant: true })
+
+      if (response?.session_id) {
+        setSessionId(response.session_id)
+      }
 
       const responseText = String(response?.response || '').trim() || 'I could not generate a response right now. Try rephrasing your question.'
       setMessages((prev) => [...prev, { role: 'assistant', content: responseText }])
@@ -451,14 +363,29 @@ export default function FloatingCareerAssistant() {
                 <p className="truncate font-mono text-[11px] uppercase tracking-widest text-ink">TalentSync Assistant</p>
                 <p className="truncate text-[11px] text-ink/75">Personalized career guidance</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="icon-btn"
-                aria-label="Close assistant"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.localStorage.removeItem(ASSISTANT_SESSION_KEY)
+                    setSessionId(null)
+                    setMessages([])
+                  }}
+                  className="icon-btn text-ink/65 hover:text-red-600 transition-colors"
+                  aria-label="Clear chat session"
+                  title="Clear chat session"
+                >
+                  <RefreshCw size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="icon-btn"
+                  aria-label="Close assistant"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </header>
 
             <div

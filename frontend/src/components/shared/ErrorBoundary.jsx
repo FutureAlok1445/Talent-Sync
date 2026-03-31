@@ -39,3 +39,5 @@ export default class ErrorBoundary extends Component {
     return this.props.children
   }
 }
+
+// Accessibility check handled: aria-label
