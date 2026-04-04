@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, Send, X, RefreshCw, Sparkles, GripVertical, AlertTriangle } from 'lucide-react'
+import { MessageSquare, Send, X, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react'
 import { chatbotService } from '../../services/chatbotService'
 import { useUIStore } from '../../store/uiStore'
 
@@ -164,7 +164,7 @@ export default function CareerAIPanel() {
 
       <header className="flex h-16 items-center justify-between border-b border-(--border) bg-(--bg-card)/80 backdrop-blur-md px-5 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-(--bg-subtle) text-(--accent-yellow)">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--bg-subtle) text-(--accent-yellow)">
             <Sparkles size={18} />
           </div>
           <div className="min-w-0">
@@ -199,7 +199,7 @@ export default function CareerAIPanel() {
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth" style={{ scrollbarWidth: 'none' }}>
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center px-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[12px] border border-(--border) bg-(--bg-subtle) text-(--accent-yellow) mb-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-(--border) bg-(--bg-subtle) text-(--accent-yellow) mb-4">
               <MessageSquare size={24} />
             </div>
             <p className="font-heading text-[15px] font-bold text-(--text-primary)">How can I help you today?</p>
@@ -211,15 +211,15 @@ export default function CareerAIPanel() {
           messages.map((message, index) => (
             <div key={index} className={`flex ${message.role === 'assistant' ? 'justify-start' : 'justify-end animate-in fade-in slide-in-from-bottom-2'}`}>
               {message.role === 'assistant' && (
-                <div className="mr-2 mt-1 shrink-0 flex h-7 w-7 items-center justify-center rounded-[6px] border border-(--border) bg-[#09090B] font-heading text-[10px] font-bold text-(--accent-yellow)">
+                <div className="mr-2 mt-1 shrink-0 flex h-7 w-7 items-center justify-center rounded-md border border-(--border) bg-(--text-primary) font-heading text-[10px] font-bold text-(--accent-yellow)">
                   TS
                 </div>
               )}
               <div
-                className={`max-w-[88%] rounded-[12px] px-4 py-3 text-[13.5px] leading-relaxed shadow-sm transition-all ${
+                className={`max-w-[88%] rounded-xl px-4 py-3 text-[13.5px] leading-relaxed shadow-sm transition-all ${
                   message.role === 'assistant'
                     ? 'bg-(--bg-subtle) border border-(--border) rounded-tl-none text-(--text-primary)'
-                    : 'bg-[#FFE135] border-transparent rounded-tr-none text-[#09090B] font-medium'
+                    : 'bg-(--accent-yellow) border-transparent rounded-tr-none text-(--text-on-accent) font-medium'
                 }`}
               >
                 {message.content}
@@ -235,7 +235,7 @@ export default function CareerAIPanel() {
             <button
               key={prompt}
               type="button"
-              className="shrink-0 rounded-[6px] border border-(--border) bg-(--bg-subtle) px-3 py-1.5 text-xs text-(--text-secondary) hover:border-(--border-strong) hover:text-(--text-primary) transition-colors"
+              className="shrink-0 rounded-md border border-(--border) bg-(--bg-subtle) px-3 py-1.5 text-xs text-(--text-secondary) hover:border-(--border-strong) hover:text-(--text-primary) transition-colors"
               onClick={() => sendMessage(prompt)}
             >
               {prompt}
@@ -255,19 +255,19 @@ export default function CareerAIPanel() {
               }
             }}
             placeholder="Type a message..."
-            className="min-h-[48px] w-full resize-none rounded-[10px] border border-(--border) bg-(--bg-card) px-4 py-3 text-[13.5px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--accent-yellow) focus:ring-1 focus:ring-(--accent-yellow)/20 focus:outline-none transition-all shadow-inner"
+            className="min-h-12 w-full resize-none rounded-[10px] border border-(--border) bg-(--bg-card) px-4 py-3 text-[13.5px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--accent-yellow) focus:ring-1 focus:ring-(--accent-yellow)/20 focus:outline-none transition-all shadow-inner"
             rows={1}
           />
           <button
             type="submit"
-            className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-[10px] bg-[#FFE135] text-[#09090B] hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-(--accent-yellow) text-(--text-on-accent) hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
             disabled={isSending || !input.trim()}
           >
             <Send size={18} />
           </button>
         </form>
         {requestError && (
-          <div className="mt-2 rounded-[6px] border border-(--border) bg-(--bg-subtle) p-3 flex items-start gap-2">
+          <div className="mt-2 rounded-md border border-(--border) bg-(--bg-subtle) p-3 flex items-start gap-2">
             <span className="text-[--warning] mt-px shrink-0"><AlertTriangle size={14} /></span>
             <div className="min-w-0">
               <p className="text-[12px] font-medium text-(--text-primary)">Career AI is offline</p>

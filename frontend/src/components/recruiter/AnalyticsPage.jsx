@@ -4,6 +4,13 @@ import { analyticsService } from '../../services/analyticsService'
 import EmptyState from '../shared/EmptyState'
 import { SkeletonCard } from '../shared/Skeletons'
 
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
+
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState({})
   const [loading, setLoading] = useState(true)
@@ -24,7 +31,7 @@ export default function AnalyticsPage() {
     load().catch((loadError) => {
       if (active) {
         setAnalytics({})
-        setError(loadError?.message || 'Unable to load analytics right now.')
+        setError(toFriendlyMessage(loadError, 'Unable to load analytics right now.'))
         setLoading(false)
       }
     })
@@ -41,15 +48,15 @@ export default function AnalyticsPage() {
     return (
       <section className="flex flex-col gap-6 pb-12 w-full max-w-none">
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-          <SkeletonCard className="min-h-[110px]" />
-          <SkeletonCard className="min-h-[110px]" />
-          <SkeletonCard className="min-h-[110px]" />
-          <SkeletonCard className="min-h-[110px]" />
-          <SkeletonCard className="min-h-[110px]" />
+          <SkeletonCard className="min-h-27.5" />
+          <SkeletonCard className="min-h-27.5" />
+          <SkeletonCard className="min-h-27.5" />
+          <SkeletonCard className="min-h-27.5" />
+          <SkeletonCard className="min-h-27.5" />
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <SkeletonCard className="min-h-[340px]" />
-          <SkeletonCard className="min-h-[340px]" />
+          <SkeletonCard className="min-h-85" />
+          <SkeletonCard className="min-h-85" />
         </div>
       </section>
     )
@@ -85,30 +92,30 @@ export default function AnalyticsPage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-5 flex flex-col gap-1">
+        <article className="flex flex-col gap-1 rounded-lg border border-(--border) bg-(--bg-card) p-5">
           <p className="font-sans text-[12px] font-medium text-(--text-secondary)">Applicants</p>
           <p className="font-heading text-[28px] font-bold text-(--text-primary)">{totals.applicants || 0}</p>
         </article>
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-5 flex flex-col gap-1">
+        <article className="flex flex-col gap-1 rounded-lg border border-(--border) bg-(--bg-card) p-5">
           <p className="font-sans text-[12px] font-medium text-(--text-secondary)">Total Matches</p>
           <p className="font-heading text-[28px] font-bold text-(--text-primary)">{totalMatches}</p>
         </article>
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-5 flex flex-col gap-1">
+        <article className="flex flex-col gap-1 rounded-lg border border-(--border) bg-(--bg-card) p-5">
           <p className="font-sans text-[12px] font-medium text-(--text-secondary)">Shortlisted</p>
           <p className="font-heading text-[28px] font-bold text-(--text-primary)">{totals.shortlisted || 0}</p>
         </article>
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-5 flex flex-col gap-1">
+        <article className="flex flex-col gap-1 rounded-lg border border-(--border) bg-(--bg-card) p-5">
           <p className="font-sans text-[12px] font-medium text-(--text-secondary)">Accepted</p>
           <p className="font-heading text-[28px] font-bold text-(--text-primary)">{totals.accepted || 0}</p>
         </article>
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-5 flex flex-col gap-1">
+        <article className="flex flex-col gap-1 rounded-lg border border-(--border) bg-(--bg-card) p-5">
           <p className="font-sans text-[12px] font-medium text-(--text-secondary)">Avg Score</p>
           <p className="font-heading text-[28px] font-bold text-(--text-primary)">{Math.round((totals.averageMatchScore || 0) * 100)}%</p>
         </article>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-6 h-80 flex flex-col">
+        <article className="flex h-80 flex-col rounded-lg border border-(--border) bg-(--bg-card) p-6">
           <header className="mb-6">
             <h2 className="font-heading text-[16px] font-bold text-(--text-primary)">Applications by Day</h2>
             <p className="font-sans text-[13px] text-(--text-secondary)">Daily inbound application volume</p>
@@ -148,7 +155,7 @@ export default function AnalyticsPage() {
           </div>
         </article>
 
-        <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-6 h-80 flex flex-col">
+        <article className="flex h-80 flex-col rounded-lg border border-(--border) bg-(--bg-card) p-6">
           <header className="mb-6">
             <h2 className="font-heading text-[16px] font-bold text-(--text-primary)">Top Skills Demand</h2>
             <p className="font-sans text-[13px] text-(--text-secondary)">Most frequent skills in applicant pool</p>

@@ -1,11 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, Filter, Search } from 'lucide-react'
+import { ChevronRight, Filter } from 'lucide-react'
 import { matchService } from '../../services/matchService'
-import { buildMatchNarrative, topShapReasons } from '../../utils/formatters'
+import { topShapReasons } from '../../utils/formatters'
 import EmptyState from '../shared/EmptyState'
 import MatchRing from '../shared/MatchRing'
 import { SkeletonCard } from '../shared/Skeletons'
+
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
 
 function getTopSkills(skills) {
   if (!skills) return []
@@ -41,7 +48,7 @@ function TableRow({ candidate, index, onViewDetail }) {
         <div className="flex flex-wrap gap-1.5 mt-1">
           {skills.length > 0 ? (
             skills.map((skill) => (
-              <span key={`${candidate.id}-${skill}`} className="rounded-[4px] border border-(--border) bg-(--bg-card) px-2 py-0.5 text-[11px] font-medium text-(--text-primary)">
+              <span key={`${candidate.id}-${skill}`} className="rounded-sm border border-(--border) bg-(--bg-card) px-2 py-0.5 text-[11px] font-medium text-(--text-primary)">
                 {skill}
               </span>
             ))
@@ -49,14 +56,14 @@ function TableRow({ candidate, index, onViewDetail }) {
             <span className="text-[11px] text-(--text-muted)">No skills listed</span>
           )}
           {candidate.skills?.length > 3 && (
-             <span className="rounded-[4px] bg-(--bg-subtle) px-2 py-0.5 text-[11px] font-medium text-(--text-secondary)">
+             <span className="rounded-sm bg-(--bg-subtle) px-2 py-0.5 text-[11px] font-medium text-(--text-secondary)">
                +{candidate.skills.length - 3}
              </span>
           )}
         </div>
       </td>
 
-      <td className="px-4 py-4 max-w-[250px] align-top">
+      <td className="max-w-62.5 px-4 py-4 align-top">
         <div className="flex items-center gap-2 mb-1.5">
           <MatchRing score={candidate.score || 0} size={28} strokeWidth={4} />
           <span className="font-sans text-[13px] font-semibold text-(--accent-cyan)">
@@ -103,7 +110,7 @@ export default function CandidatesPage() {
     load().catch((loadError) => {
       if (!active) return
       setCandidates([])
-      setError(loadError?.message || 'Unable to load candidates right now.')
+      setError(toFriendlyMessage(loadError, 'Unable to load candidates right now.'))
       setLoading(false)
     })
 
@@ -134,14 +141,14 @@ export default function CandidatesPage() {
           {jobId && (
             <button
               onClick={() => navigate('/recruiter/candidates')}
-              className="rounded-[6px] border border-(--border-strong) bg-(--bg-base) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:bg-(--bg-subtle)"
+              className="rounded-md border border-(--border-strong) bg-(--bg-base) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:bg-(--bg-subtle)"
             >
               Clear Filter
             </button>
           )}
           <button
-            onClick={() => navigate('/how-matching-works')}
-            className="flex items-center gap-2 rounded-[6px] border border-(--border) bg-(--bg-subtle) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:border-(--accent-yellow)"
+            onClick={() => navigate('/recruiter/how-it-works')}
+            className="flex items-center gap-2 rounded-md border border-(--border) bg-(--bg-subtle) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:border-(--accent-yellow)"
           >
              <Filter size={14} /> Matching Details
           </button>
@@ -178,8 +185,8 @@ export default function CandidatesPage() {
       ) : null}
 
       {!loading && !error && candidates.length > 0 ? (
-        <div className="rounded-[8px] border border-(--border) bg-(--bg-card) overflow-x-auto shadow-sm">
-          <table className="w-full text-left font-sans min-w-[800px] border-collapse">
+        <div className="overflow-x-auto rounded-lg border border-(--border) bg-(--bg-card) shadow-sm">
+          <table className="min-w-200 w-full border-collapse text-left font-sans">
             <thead className="border-b border-(--border) bg-(--bg-subtle)">
               <tr>
                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) w-[35%]">

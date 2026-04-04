@@ -46,6 +46,16 @@ export function useProfileForm(toast) {
   const [sectionErrors, setSectionErrors] = useState({})
   const mountedRef = useRef(true)
 
+  const toFriendlyError = useCallback((err, fallback = 'Unable to complete this action right now.') => {
+    const status = err?.response?.status
+    if (status === 400) return 'Please review your input and try again.'
+    if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+    if (status === 404) return 'This item is no longer available.'
+    if (status >= 500) return 'Server is currently unavailable. Please try again shortly.'
+    if (err?.code === 'ECONNABORTED') return 'Request timed out. Please try again.'
+    return fallback
+  }, [])
+
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false }
@@ -109,12 +119,12 @@ export function useProfileForm(toast) {
       setCertificatesPublic(data.certificatesPublic !== false)
     } catch (err) {
       if (mountedRef.current) {
-        setSectionErrors((p) => ({ ...p, load: err?.message || 'Failed to load profile.' }))
+        setSectionErrors((p) => ({ ...p, load: toFriendlyError(err, 'Unable to load your profile right now.') }))
       }
     } finally {
       if (mountedRef.current) setLoading(false)
     }
-  }, [user])
+  }, [toFriendlyError, user])
 
   useEffect(() => { fetchProfile() }, [fetchProfile])
 
@@ -150,7 +160,7 @@ export function useProfileForm(toast) {
       })
       showResult('personal', true)
     } catch (err) {
-      showResult('personal', false, err?.response?.data?.detail || err?.message)
+      showResult('personal', false, toFriendlyError(err, 'Unable to save personal details.'))
     } finally {
       setSaving('personal', false)
     }
@@ -163,7 +173,7 @@ export function useProfileForm(toast) {
       await profileService.updateProfile({ bio })
       showResult('bio', true)
     } catch (err) {
-      showResult('bio', false, err?.response?.data?.detail || err?.message)
+      showResult('bio', false, toFriendlyError(err, 'Unable to save your bio.'))
     } finally {
       setSaving('bio', false)
     }
@@ -177,7 +187,7 @@ export function useProfileForm(toast) {
       await profileService.updateProfile({ socialLinks: filtered })
       showResult('links', true)
     } catch (err) {
-      showResult('links', false, err?.response?.data?.detail || err?.message)
+      showResult('links', false, toFriendlyError(err, 'Unable to save social links.'))
     } finally {
       setSaving('links', false)
     }
@@ -191,7 +201,7 @@ export function useProfileForm(toast) {
       setResume(result?.resume || result || { url: result?.url, name: file.name, size: file.size })
       showResult('resume', true, 'Resume uploaded ✓')
     } catch (err) {
-      showResult('resume', false, err?.response?.data?.detail || err?.message)
+      showResult('resume', false, toFriendlyError(err, 'Unable to upload resume.'))
     } finally {
       setSaving('resume', false)
     }
@@ -205,7 +215,7 @@ export function useProfileForm(toast) {
       setResume(null)
       showResult('resume', true, 'Resume removed.')
     } catch (err) {
-      showResult('resume', false, err?.response?.data?.detail || err?.message)
+      showResult('resume', false, toFriendlyError(err, 'Unable to remove resume.'))
     } finally {
       setSaving('resume', false)
     }
@@ -225,26 +235,13 @@ export function useProfileForm(toast) {
     setSaving('certs', true)
     clearError('certs')
     try {
-      const body = new FormData()
-      body.append('file', file)
-      const res = await import('../services/api').then((m) =>
-        m.default.post('/students/me/certificates', body, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        })
-      )
-      const cert = res?.data
+      const cert = await profileService.uploadCertificate(file)
       if (cert) {
         setCertificates((prev) => [...prev, cert])
       }
       showResult('certs', true, 'Certificate uploaded ✓')
     } catch (err) {
-      const status = err?.response?.status
-      if (status === 404) {
-        // Endpoint doesn't exist, ignore or handle gracefully
-        showResult('certs', false, 'Feature coming soon.')
-      } else {
-        showResult('certs', false, err?.response?.data?.detail || err?.message)
-      }
+      showResult('certs', false, toFriendlyError(err, 'Unable to upload certificate.'))
     } finally {
       setSaving('certs', false)
     }
@@ -254,18 +251,11 @@ export function useProfileForm(toast) {
     setSaving('certs', true)
     clearError('certs')
     try {
-      await import('../services/api').then((m) =>
-        m.default.delete(`/students/me/certificates/${certId}`)
-      )
+      await profileService.deleteCertificate(certId)
       setCertificates((prev) => prev.filter((c) => c.id !== certId))
       showResult('certs', true, 'Certificate removed.')
     } catch (err) {
-      const status = err?.response?.status
-      if (status === 404) {
-        showResult('certs', false, 'Not found.')
-      } else {
-        showResult('certs', false, err?.response?.data?.detail || err?.message)
-      }
+      showResult('certs', false, toFriendlyError(err, 'Unable to remove certificate.'))
     } finally {
       setSaving('certs', false)
     }

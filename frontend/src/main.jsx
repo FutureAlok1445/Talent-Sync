@@ -53,6 +53,7 @@ createRoot(document.getElementById('root')).render(
                     <Route path="/student/applications" element={<StudentApplicationsPage />} />
                     <Route path="/student/match/:id" element={<StudentMatchDetailPage />} />
                     <Route path="/student/onboarding" element={<StudentOnboardingPage />} />
+                    <Route path="/student/how-it-works" element={<HowMatchingWorksPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute requiredRole="RECRUITER" />}>
@@ -61,6 +62,7 @@ createRoot(document.getElementById('root')).render(
                     <Route path="/recruiter/candidates" element={<RecruiterCandidatesPage />} />
                     <Route path="/recruiter/candidates/:id" element={<RecruiterCandidateDetailPage />} />
                     <Route path="/recruiter/analytics" element={<RecruiterAnalyticsPage />} />
+                    <Route path="/recruiter/how-it-works" element={<HowMatchingWorksPage />} />
                   </Route>
 
                   <Route path="/how-matching-works" element={<HowMatchingWorksPage />} />

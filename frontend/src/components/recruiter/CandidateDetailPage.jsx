@@ -11,6 +11,13 @@ import { SkeletonCard } from '../shared/Skeletons'
 import StatusBadge from '../shared/StatusBadge'
 import { useToast } from '../shared/useToast'
 
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
+
 const STATUS_ACTIONS = [
   { label: 'Mark Reviewed', value: 'REVIEWED' },
   { label: 'Shortlist', value: 'SHORTLISTED' },
@@ -55,7 +62,7 @@ export default function CandidateDetailPage() {
     load().catch((error) => {
       if (active) {
         setCandidate(null)
-        setLoadError(error?.message || 'Unable to load candidate detail right now.')
+        setLoadError(toFriendlyMessage(error, 'Unable to load candidate detail right now.'))
         setLoading(false)
       }
     })
@@ -65,7 +72,7 @@ export default function CandidateDetailPage() {
 
   if (loading) {
     return (
-      <section className="mx-auto w-full max-w-[1100px] grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] pb-12">
+      <section className="mx-auto grid w-full max-w-275 gap-6 pb-12 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <SkeletonCard className="min-h-75" />
         <SkeletonCard className="min-h-75" />
       </section>
@@ -116,7 +123,7 @@ export default function CandidateDetailPage() {
       <header className="flex items-center gap-4">
         <button
           onClick={() => navigate('/recruiter/candidates')}
-          className="flex h-9 w-9 items-center justify-center rounded-[6px] border border-(--border) bg-(--bg-base) text-(--text-secondary) transition-colors hover:bg-(--bg-subtle) hover:text-(--text-primary)"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-(--border) bg-(--bg-base) text-(--text-secondary) transition-colors hover:bg-(--bg-subtle) hover:text-(--text-primary)"
         >
           <ArrowLeft size={18} />
         </button>
@@ -128,7 +135,7 @@ export default function CandidateDetailPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
         {/* Left Column: Candidate Info & Actions */}
         <div className="flex flex-col gap-6">
-          <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-6">
+          <article className="rounded-lg border border-(--border) bg-(--bg-card) p-6">
             <header className="mb-6">
               <h2 className="font-heading text-[24px] font-bold text-(--text-primary)">{candidate.fullName}</h2>
               <p className="font-sans text-[14px] text-(--text-secondary) mt-1">
@@ -138,7 +145,7 @@ export default function CandidateDetailPage() {
 
             <div className="flex flex-wrap gap-2 mb-6">
               {(candidate.skills || []).map((skill) => (
-                <span key={skill} className="rounded-[4px] border border-(--border) bg-(--bg-base) px-2.5 py-1 text-[12px] font-medium text-(--text-primary)">
+                <span key={skill} className="rounded-sm border border-(--border) bg-(--bg-base) px-2.5 py-1 text-[12px] font-medium text-(--text-primary)">
                   {skill}
                 </span>
               ))}
@@ -148,7 +155,7 @@ export default function CandidateDetailPage() {
               {buildMatchNarrative(candidate)}
             </p>
 
-            <div className="rounded-[6px] bg-(--bg-subtle) p-4 mt-6">
+            <div className="mt-6 rounded-md bg-(--bg-subtle) p-4">
                <p className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) mb-3">Top Reasons For Match</p>
                <div className="flex flex-col gap-1.5">
                 {topReasons.length ? (
@@ -164,7 +171,7 @@ export default function CandidateDetailPage() {
             </div>
           </article>
 
-          <article className="rounded-[8px] border border-(--border) bg-(--bg-card) p-6">
+          <article className="rounded-lg border border-(--border) bg-(--bg-card) p-6">
             <p className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) mb-4">Hiring Funnel Actions</p>
             <div className="mb-6">
               <StatusBadge status={status} />
@@ -176,7 +183,7 @@ export default function CandidateDetailPage() {
                   type="button"
                   disabled={statusSaving || action.value === status}
                   onClick={() => onUpdateStatus(action.value)}
-                  className={`rounded-[6px] px-4 py-2 font-sans text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50
+                  className={`rounded-md px-4 py-2 font-sans text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50
                     ${action.value === status 
                       ? 'border border-(--border-strong) bg-(--bg-subtle) text-(--text-secondary)'
                       : 'border border-(--border-strong) bg-(--bg-base) text-(--text-primary) hover:bg-(--text-primary) hover:text-(--bg-base)'
@@ -191,7 +198,7 @@ export default function CandidateDetailPage() {
         </div>
 
         {/* Right Column: SHAP Chart & Score */}
-        <aside className="rounded-[8px] border border-(--border) bg-(--bg-card) p-6 max-h-min">
+        <aside className="max-h-min rounded-lg border border-(--border) bg-(--bg-card) p-6">
           <p className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) mb-6 text-center">Compatibility Score</p>
           <div className="flex items-center justify-center mb-8">
             <MatchRing score={candidate.score || 0} size={120} strokeWidth={8} />

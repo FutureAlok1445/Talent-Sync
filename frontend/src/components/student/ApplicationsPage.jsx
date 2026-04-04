@@ -6,6 +6,13 @@ import EmptyState from '../shared/EmptyState'
 import { SkeletonCard } from '../shared/Skeletons'
 import StatusBadge from '../shared/StatusBadge'
 
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
+
 export default function ApplicationsPage() {
   const navigate = useNavigate()
   const [applications, setApplications] = useState([])
@@ -27,7 +34,7 @@ export default function ApplicationsPage() {
     load().catch((loadError) => {
       if (!active) return
       setApplications([])
-      setError(loadError?.message || 'Unable to load applications right now.')
+      setError(toFriendlyMessage(loadError, 'Unable to load applications right now.'))
       setLoading(false)
     })
 
@@ -50,7 +57,7 @@ export default function ApplicationsPage() {
             {pipeline.map((stage) => (
               <div
                 key={stage.key}
-                className="flex flex-col rounded-[8px] bg-(--bg-card) p-4 transition-colors hover:bg-(--bg-subtle) border border-(--border)"
+                className="flex flex-col rounded-lg bg-(--bg-card) p-4 transition-colors hover:bg-(--bg-subtle) border border-(--border)"
                 style={{ borderTop: stage.active ? '3px solid var(--accent-yellow)' : '1px solid var(--border)' }}
               >
                 <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.15em] text-(--text-muted)">
@@ -97,7 +104,7 @@ export default function ApplicationsPage() {
           {applications.map((application) => (
             <article 
               key={application.id} 
-              className="group flex items-center justify-between gap-4 rounded-[8px] border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)"
+              className="group flex items-center justify-between gap-4 rounded-lg border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-heading text-[16px] font-bold text-(--text-primary)">

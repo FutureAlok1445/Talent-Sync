@@ -16,6 +16,7 @@ import { useMatchStore } from '../../store/matchStore'
 import { useApplicationStore } from '../../store/applicationStore'
 import { matchService } from '../../services/matchService'
 import { applicationService } from '../../services/applicationService'
+import { profileService } from '../../services/profileService'
 import { normalizeRole } from '../../utils/roleUtils'
 
 const BANNER_SESSION_KEY = 'ts-profile-banner-dismissed'
@@ -37,6 +38,7 @@ export default function AppLayout() {
   const user = useAuthStore((state) => state.user)
   const role = normalizeRole(user?.role)
   const [bannerDismissed, dismissBanner] = useBannerState()
+  const [profileCompletion, setProfileCompletion] = useState(100)
   const { toggleAIPanel, setAIPanelOpen } = useUIStore()
 
   const setMatches = useMatchStore((state) => state.setMatches)
@@ -48,11 +50,16 @@ export default function AppLayout() {
     if (role === 'STUDENT') {
       Promise.all([
         matchService.getMyMatches(50),
-        applicationService.getMyApplications()
-      ]).then(([matches, applications]) => {
+        applicationService.getMyApplications(),
+        profileService.getMyProfile(),
+      ]).then(([matches, applications, profile]) => {
         if (!active) return
         setMatches(matches)
         setApplications(applications)
+        const completion = Number(profile?.profileCompletion)
+        if (Number.isFinite(completion)) {
+          setProfileCompletion(Math.max(0, Math.min(100, completion)))
+        }
       }).catch(() => {})
     }
     return () => { active = false }
@@ -81,14 +88,13 @@ export default function AppLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [toggleAIPanel, setAIPanelOpen])
 
-  // Show banner for student role when not dismissed
-  // In a real app, completion < 80% would be the condition
-  const showBanner = role === 'STUDENT' && !bannerDismissed
+  // Show banner for students below completion threshold.
+  const showBanner = role === 'STUDENT' && !bannerDismissed && profileCompletion < 80
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-(--bg-base) text-(--text-primary)">
       {/* Fixed topbar — sticky top-0 handled inside AppNavbar */}
-      <AppNavbar showBanner={showBanner} onDismissBanner={dismissBanner} />
+      <AppNavbar showBanner={showBanner} onDismissBanner={dismissBanner} profileCompletion={profileCompletion} />
 
       {/* Body: main content + AI panel */}
       <div className="flex min-h-0 flex-1 overflow-hidden">

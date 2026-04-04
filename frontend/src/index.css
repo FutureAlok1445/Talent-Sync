@@ -25,6 +25,7 @@
   --text-primary: #09090B;
   --text-secondary: #52525B;
   --text-muted: #A1A1AA;
+  --text-on-accent: #09090B;
   
   /* Accents */
   --accent-yellow: #FFE135;
@@ -44,6 +45,7 @@
   --text-primary: #FAFAFA;
   --text-secondary: #A1A1AA;
   --text-muted: #71717A;
+  --text-on-accent: #09090B;
 }
 
 @theme {

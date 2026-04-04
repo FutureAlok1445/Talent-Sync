@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { Sparkles, Sun, Moon, LogOut, User, ChevronDown, Zap } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { authService } from '../../services/authService'
 import { useToast } from '../shared/useToast'
 import { useAuthStore } from '../../store/authStore'
@@ -26,7 +26,7 @@ const BASE_STUDENT_LINKS = [
   { to: '/student/matches', label: 'Matches' },
   { to: '/student/applications', label: 'Applications' },
   { to: '/student/profile', label: 'Profile' },
-  { to: '/how-matching-works', label: 'How It Works' },
+  { to: '/student/how-it-works', label: 'How It Works' },
 ]
 
 const RECRUITER_LINKS = [
@@ -34,7 +34,7 @@ const RECRUITER_LINKS = [
   { to: '/recruiter/candidates', label: 'Candidates' },
   { to: '/recruiter/post-job', label: 'Post Job' },
   { to: '/recruiter/analytics', label: 'Analytics' },
-  { to: '/how-matching-works', label: 'How It Works' },
+  { to: '/recruiter/how-it-works', label: 'How It Works' },
 ]
 
 // ── Profile incomplete banner ────────────────────────────────────────────────
@@ -42,20 +42,20 @@ function ProfileBanner({ onDismiss }) {
   const navigate = useNavigate()
   return (
     <div className="flex h-10 w-full items-center justify-between bg-(--accent-yellow) px-4" role="alert">
-      <p className="flex items-center gap-1.5 font-sans text-[13px] font-medium text-[#09090B]">
+      <p className="flex items-center gap-1.5 font-sans text-[13px] font-medium text-(--text-on-accent)">
         <Zap size={14} className="fill-current" /> Your profile is incomplete — finish it to unlock better AI matches.
       </p>
       <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={() => navigate('/student/profile')}
-          className="font-heading text-[12px] font-bold uppercase text-[#09090B] underline"
+          className="font-heading text-[12px] font-bold uppercase text-(--text-on-accent) underline"
         >
           Complete now →
         </button>
         <button
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="font-bold text-[#09090B] opacity-60 hover:opacity-100 transition-opacity"
+          className="font-bold text-(--text-on-accent) opacity-60 hover:opacity-100 transition-opacity"
         >
           ×
         </button>
@@ -65,7 +65,7 @@ function ProfileBanner({ onDismiss }) {
 }
 
 // ── Avatar Dropdown ──────────────────────────────────────────────────────────
-function AvatarDropdown({ user, role, onLogout }) {
+function AvatarDropdown({ user, role, profileCompletion, onLogout }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const navigate = useNavigate()
@@ -79,20 +79,19 @@ function AvatarDropdown({ user, role, onLogout }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const initials = (user?.name || 'DU').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  const email = user?.email || 'demo@example.com'
-  const name = user?.name || 'Demo User'
-  // Mock: profile is incomplete for demo (would be derived from profileCompletion state)
-  const isIncomplete = role === 'STUDENT'
+  const initials = (user?.name || user?.email || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const email = user?.email || ''
+  const name = user?.name || 'User'
+  const isIncomplete = role === 'STUDENT' && Number(profileCompletion ?? 100) < 100
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 rounded-[6px] border border-(--border) px-2 py-1 transition-colors hover:bg-(--bg-subtle)"
+        className="flex items-center gap-1.5 rounded-md border border-(--border) px-2 py-1 transition-colors hover:bg-(--bg-subtle)"
         aria-label="User menu"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--accent-yellow) font-heading text-[11px] font-bold text-[#09090B]">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--accent-yellow) font-heading text-[11px] font-bold text-(--text-on-accent)">
           {initials}
         </span>
         <ChevronDown size={12} className="text-(--text-muted)" />
@@ -100,7 +99,7 @@ function AvatarDropdown({ user, role, onLogout }) {
 
       {open && (
         <div
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-52 rounded-[8px] border border-(--border) bg-(--bg-card) py-1"
+          className="absolute right-0 top-[calc(100%+8px)] z-50 w-52 rounded-lg border border-(--border) bg-(--bg-card) py-1"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
         >
           {/* User info */}
@@ -121,7 +120,7 @@ function AvatarDropdown({ user, role, onLogout }) {
               </button>
             ) : (
               <span className="flex items-center gap-1.5 font-sans text-[11px] text-(--success)">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#22C55E]" />
+                <span className="inline-block h-2 w-2 rounded-full bg-(--success)" />
                 Active
               </span>
             )}
@@ -152,7 +151,7 @@ function AvatarDropdown({ user, role, onLogout }) {
 }
 
 // ── Main TopBar ──────────────────────────────────────────────────────────────
-export default function AppNavbar({ showBanner, onDismissBanner }) {
+export default function AppNavbar({ showBanner, onDismissBanner, profileCompletion = 100 }) {
   const navigate = useNavigate()
   const toast = useToast()
   const user = useAuthStore((state) => state.user)
@@ -208,7 +207,7 @@ export default function AppNavbar({ showBanner, onDismissBanner }) {
     <div className="sticky top-0 z-20 flex flex-col">
       <header className="flex h-14 items-center border-b border-(--border) bg-(--bg-base)/80 backdrop-blur-lg px-4 md:px-6">
         {/* LEFT: Logo area */}
-        <div className="flex w-[180px] shrink-0 items-center">
+        <div className="flex w-45 shrink-0 items-center">
           <button
             onClick={() => navigate(role === 'RECRUITER' ? '/recruiter/dashboard' : '/student/dashboard')}
             className="flex items-center gap-2 group"
@@ -225,7 +224,7 @@ export default function AppNavbar({ showBanner, onDismissBanner }) {
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `relative flex items-center gap-1.5 shrink-0 rounded-[8px] px-4 py-1.5 font-heading text-[14.5px] transition-all duration-300 whitespace-nowrap z-10
+                `relative flex items-center gap-1.5 shrink-0 rounded-lg px-4 py-1.5 font-heading text-[14.5px] transition-all duration-300 whitespace-nowrap z-10
                 ${isActive
                   ? 'font-bold text-(--text-primary)'
                   : 'text-(--text-secondary) hover:text-(--text-primary)'
@@ -237,14 +236,14 @@ export default function AppNavbar({ showBanner, onDismissBanner }) {
                   {isActive && (
                     <motion.div
                       layoutId="nav-toggle-bg"
-                      className="absolute inset-0 z-0 rounded-[8px] bg-(--bg-subtle) border border-(--border)"
+                      className="absolute inset-0 z-0 rounded-lg bg-(--bg-subtle) border border-(--border)"
                       transition={{ type: 'spring', bounce: 0.25, duration: 0.5 }}
                     />
                   )}
                   <span className="relative z-10 flex items-center gap-2">
                     {link.label}
                     {link.badge != null && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-(--accent-yellow) px-1 font-mono text-[10px] font-bold text-[#09090B]">
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-(--accent-yellow) px-1 font-mono text-[10px] font-bold text-(--text-on-accent)">
                         {link.badge}
                       </span>
                     )}
@@ -256,15 +255,15 @@ export default function AppNavbar({ showBanner, onDismissBanner }) {
         </nav>
 
         {/* RIGHT: actions area */}
-        <div className="flex w-[180px] shrink-0 items-center justify-end gap-3">
+        <div className="flex w-45 shrink-0 items-center justify-end gap-3">
           {/* Career AI toggle (Student Only) */}
           {role === 'STUDENT' && (
             <button
               type="button"
               onClick={toggleAIPanel}
-              className={`flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-heading text-[13px] font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-heading text-[13px] font-semibold transition-all whitespace-nowrap ${
                 aiPanelOpen
-                  ? 'bg-(--accent-yellow) text-[#09090B] shadow-sm'
+                  ? 'bg-(--accent-yellow) text-(--text-on-accent) shadow-sm'
                   : 'bg-(--bg-subtle) text-(--text-primary) hover:bg-(--bg-card) border border-(--border)'
               }`}
             >
@@ -278,13 +277,13 @@ export default function AppNavbar({ showBanner, onDismissBanner }) {
             type="button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="flex h-9 w-9 items-center justify-center rounded-[6px] text-(--text-secondary) hover:bg-(--bg-subtle) hover:text-(--text-primary) transition-colors border border-transparent hover:border-(--border)"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-(--text-secondary) hover:bg-(--bg-subtle) hover:text-(--text-primary) transition-colors border border-transparent hover:border-(--border)"
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
           {/* Avatar dropdown */}
-          <AvatarDropdown user={user} role={role} onLogout={onLogout} />
+          <AvatarDropdown user={user} role={role} profileCompletion={profileCompletion} onLogout={onLogout} />
         </div>
       </header>
 

@@ -5,7 +5,6 @@ import { ChevronRight, ChevronDown, Sun, CloudSun, Moon, ArrowRight } from 'luci
 import { useAuthStore } from '../../store/authStore'
 import { useMatchStore } from '../../store/matchStore'
 import { useApplicationStore } from '../../store/applicationStore'
-import { jobService } from '../../services/jobService'
 import { matchService } from '../../services/matchService'
 import { profileService } from '../../services/profileService'
 import { SkeletonCard } from '../shared/Skeletons'
@@ -39,7 +38,7 @@ function MatchArc({ score }) {
 function ProgressBar({ label, score }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-[60px] text-right font-sans text-[10px] font-medium uppercase text-(--text-muted)">{label}</span>
+      <span className="w-15 text-right font-sans text-[10px] font-medium uppercase text-(--text-muted)">{label}</span>
       <div className="h-1 flex-1 overflow-hidden rounded-full bg-(--bg-subtle)">
         <div className="h-full rounded-full bg-(--accent-yellow)" style={{ width: `${score}%` }}></div>
       </div>
@@ -57,7 +56,7 @@ export default function StudentDashboard() {
   
   const applications = useApplicationStore((state) => state.applications)
   
-  const [profileIncomplete, setProfileIncomplete] = useState(true) // Assumed mock or derive
+  const [profileIncomplete, setProfileIncomplete] = useState(false)
   const [howItWorksOpen, setHowItWorksOpen] = useState(false)
 
   const stats = useMemo(() => {
@@ -118,14 +117,14 @@ export default function StudentDashboard() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 font-heading text-[26px] font-bold text-(--text-primary)">
-            {greeting.text}, {user?.name?.split(' ')[0] || 'Demo'} <greeting.Icon size={24} className="text-(--accent-yellow)" />
+            {greeting.text}, {user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'there'} <greeting.Icon size={24} className="text-(--accent-yellow)" />
           </h1>
           <p className="font-sans text-[14px] text-(--text-secondary)">Your AI match engine is active and ready.</p>
         </div>
         {profileIncomplete && (
           <button
             onClick={() => navigate('/student/profile')}
-            className="rounded-[6px] bg-(--accent-yellow) px-4 py-2 font-heading text-[12px] font-bold uppercase text-[#09090B] transition-transform hover:-translate-y-[1px]"
+            className="rounded-md bg-(--accent-yellow) px-4 py-2 font-heading text-[12px] font-bold uppercase text-(--text-on-accent) transition-transform hover:-translate-y-px"
           >
             Complete your profile <ArrowRight size={14} className="inline ml-1" />
           </button>
@@ -142,7 +141,7 @@ export default function StudentDashboard() {
         ].map((stat) => (
           <div
             key={stat.label}
-            className="flex flex-col rounded-[8px] border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)"
+            className="flex flex-col rounded-lg border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)"
             style={{ borderTop: `3px solid ${stat.color}` }}
           >
             <span className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
@@ -177,7 +176,7 @@ export default function StudentDashboard() {
             ))}
           </div>
         ) : topMatches.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[8px] border border-(--border) bg-(--bg-card) px-6 py-12 text-center">
+          <div className="flex flex-col items-center justify-center rounded-lg border border-(--border) bg-(--bg-card) px-6 py-12 text-center">
             <svg width="120" height="80" viewBox="0 0 120 80" className="opacity-30 mb-6">
               <circle cx="20" cy="40" r="4" fill="none" stroke="var(--border-strong)" strokeWidth="2" />
               <circle cx="60" cy="20" r="6" fill="none" stroke="var(--border-strong)" strokeWidth="2" />
@@ -189,7 +188,7 @@ export default function StudentDashboard() {
             <p className="mt-1 font-sans text-sm text-(--text-secondary)">Complete your profile to unlock ranked recommendations</p>
             <button
               onClick={() => navigate('/student/profile')}
-              className="mt-6 rounded-[6px] bg-(--accent-yellow) px-4 py-2 font-heading text-[12px] font-bold text-[#09090B] transition-transform hover:-translate-y-[1px]"
+              className="mt-6 rounded-md bg-(--accent-yellow) px-4 py-2 font-heading text-[12px] font-bold text-(--text-on-accent) transition-transform hover:-translate-y-px"
             >
               START ONBOARDING <ArrowRight size={14} className="inline ml-1" />
             </button>
@@ -199,16 +198,16 @@ export default function StudentDashboard() {
             {topMatches.map((match) => (
               <div
                 key={match.id}
-                className="group flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-[8px] border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--accent-yellow)"
+                className="group flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-lg border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--accent-yellow)"
               >
                 <div className="flex items-center gap-4 min-w-0 md:w-[45%] lg:w-1/2 shrink-0">
                   <MatchArc score={match.score || match.finalScore || 0} />
                   <div className="min-w-0 overflow-hidden">
-                    <h3 className="truncate font-heading text-[15px] font-bold text-(--text-primary)">{match.company || 'TechCorp'}</h3>
-                    <p className="truncate font-sans text-[13px] text-(--text-secondary)">{match.title || match.roleTitle || 'Internship'}</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5 hidden sm:flex">
-                      {(match.requiredSkills || ['React', 'Node']).slice(0, 3).map(skill => (
-                        <span key={skill} className="rounded-[4px] border border-(--border) bg-(--bg-subtle) px-2 py-0.5 font-sans text-[11px] text-(--text-secondary)">
+                    <h3 className="truncate font-heading text-[15px] font-bold text-(--text-primary)">{match.company || 'Company'}</h3>
+                    <p className="truncate font-sans text-[13px] text-(--text-secondary)">{match.title || match.roleTitle || 'Role'}</p>
+                    <div className="mt-2 hidden flex-wrap gap-1.5 sm:flex">
+                      {(match.requiredSkills || []).slice(0, 3).map(skill => (
+                        <span key={skill} className="rounded-sm border border-(--border) bg-(--bg-subtle) px-2 py-0.5 font-sans text-[11px] text-(--text-secondary)">
                           {skill}
                         </span>
                       ))}
@@ -216,7 +215,7 @@ export default function StudentDashboard() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5 md:w-[220px] shrink-0">
+                <div className="flex flex-col gap-1.5 md:w-55 shrink-0">
                   {/* Mock subscores based on match.score if missing */}
                   {(() => {
                     const pct = Math.round((match.score || match.finalScore || 0) * 100)
@@ -245,7 +244,7 @@ export default function StudentDashboard() {
       <section>
         <button
           onClick={() => setHowItWorksOpen(!howItWorksOpen)}
-          className="flex w-full items-center gap-2 rounded-[8px] bg-(--bg-subtle) px-4 py-3 text-left font-sans text-sm font-medium text-(--text-primary) transition-colors hover:bg-(--bg-card)"
+          className="flex w-full items-center gap-2 rounded-lg bg-(--bg-subtle) px-4 py-3 text-left font-sans text-sm font-medium text-(--text-primary) transition-colors hover:bg-(--bg-card)"
         >
           <ChevronDown size={16} className={`transition-transform ${howItWorksOpen ? 'rotate-180' : ''}`} />
           How does the AI matching engine work?
@@ -258,7 +257,7 @@ export default function StudentDashboard() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 rounded-[8px] bg-(--bg-subtle) p-6">
+              <div className="mt-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 rounded-lg bg-(--bg-subtle) p-6">
                 {[
                   'Profile Standardization',
                   'Skills Contextualization',

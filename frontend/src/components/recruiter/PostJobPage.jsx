@@ -34,7 +34,8 @@ function FieldError({ error }) {
   return <p className="text-[12px] font-medium text-(--danger) mt-1.5">{error}</p>
 }
 
-function SectionHeader({ icon: Icon, title, subtitle }) {
+function SectionHeader({ icon, title, subtitle }) {
+  const Icon = icon
   return (
     <div className="flex items-center gap-3 border-b border-(--border) pb-4 mb-6">
       <div className="flex items-center justify-center w-8 h-8 rounded-full bg-(--bg-subtle) text-(--text-primary)">
@@ -70,7 +71,7 @@ function JobPreviewCard({ formData, companyName }) {
   const { title, jobType, workMode, location, skills, salaryMin, salaryMax } = formData
 
   return (
-    <div className="flex flex-col gap-5 rounded-[8px] border border-(--border) bg-(--bg-card) p-6">
+    <div className="flex flex-col gap-5 rounded-lg border border-(--border) bg-(--bg-card) p-6">
       <div>
         <h2 className="font-heading text-lg font-bold text-(--text-primary)">
           {title || 'Job Title'}
@@ -103,7 +104,7 @@ function JobPreviewCard({ formData, companyName }) {
           <p className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) mb-2">Required Skills</p>
           <div className="flex flex-wrap gap-1.5">
             {skills.map(skill => (
-              <span key={skill} className="rounded-[4px] border border-(--border) bg-(--bg-base) px-2 py-1 text-[12px] font-medium text-(--text-primary)">
+              <span key={skill} className="rounded-sm border border-(--border) bg-(--bg-base) px-2 py-1 text-[12px] font-medium text-(--text-primary)">
                 {skill}
               </span>
             ))}
@@ -135,11 +136,11 @@ export default function PostJobPage() {
       toast.success('Job Posted! ✓')
       navigate('/recruiter/dashboard')
     } catch (err) {
-      toast.error(err.message || 'Something went wrong.')
+      toast.error(err?.message || 'Unable to post this job right now. Please try again shortly.')
     }
   }
 
-  const inputClass = "w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+  const inputClass = "w-full rounded-md border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
   const labelClass = "mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)"
 
   return (
@@ -157,7 +158,7 @@ export default function PostJobPage() {
           <form onSubmit={onSubmit} className="flex flex-col gap-6">
             
             {/* ── Section 1: Basic Info ────────────────────── */}
-            <div className="rounded-[8px] bg-(--bg-card) border border-(--border) p-6">
+            <div className="rounded-lg bg-(--bg-card) border border-(--border) p-6">
               <SectionHeader icon={Briefcase} title="Basic Info" subtitle="Job title and description" />
 
               <div className="space-y-5">
@@ -183,7 +184,7 @@ export default function PostJobPage() {
                     type="text"
                     value={companyName}
                     readOnly
-                    className="w-full rounded-[6px] border border-(--border) bg-(--bg-subtle) px-3 py-2 text-[13px] text-(--text-secondary) cursor-not-allowed opacity-70"
+                    className="w-full rounded-md border border-(--border) bg-(--bg-subtle) px-3 py-2 text-[13px] text-(--text-secondary) cursor-not-allowed opacity-70"
                   />
                 </div>
 
@@ -196,7 +197,7 @@ export default function PostJobPage() {
                     value={formData.description}
                     onChange={(e) => handleChange('description', e.target.value)}
                     placeholder="Describe responsibilities, expectations, and what makes this role exciting (min 100 chars)..."
-                    className={`${inputClass} min-h-[160px] resize-y pb-8`}
+                    className={`${inputClass} min-h-40 resize-y pb-8`}
                     maxLength={2000}
                   />
                   <CharCounter current={formData.description.length} max={2000} warn={1800} />
@@ -206,7 +207,7 @@ export default function PostJobPage() {
             </div>
 
             {/* ── Section 2: Requirements ──────────────────── */}
-            <div className="rounded-[8px] bg-(--bg-card) border border-(--border) p-6">
+            <div className="rounded-lg bg-(--bg-card) border border-(--border) p-6">
               <SectionHeader icon={GraduationCap} title="Requirements" subtitle="Skills, experience, and education" />
 
               <div className="space-y-5">
@@ -243,7 +244,7 @@ export default function PostJobPage() {
                     id="post-job-education"
                     value={formData.education}
                     onChange={(e) => handleChange('education', e.target.value)}
-                    className={`${inputClass} appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M7%2010L12%2015L17%2010%22%20stroke%3D%22%239CA3AF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-[length:20px] bg-[right_8px_center] bg-no-repeat pr-10`}
+                    className={`${inputClass} appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M7%2010L12%2015L17%2010%22%20stroke%3D%22%239CA3AF%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-size-[20px] bg-position-[right_8px_center] bg-no-repeat pr-10`}
                   >
                     {EDUCATION_OPTIONS.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
@@ -254,7 +255,7 @@ export default function PostJobPage() {
             </div>
 
             {/* ── Section 3: Job Details ───────────────────── */}
-            <div className="rounded-[8px] bg-(--bg-card) border border-(--border) p-6">
+            <div className="rounded-lg bg-(--bg-card) border border-(--border) p-6">
               <SectionHeader icon={MapPin} title="Job Details" subtitle="Type, mode, salary, and location" />
 
               <div className="space-y-5">
@@ -349,7 +350,7 @@ export default function PostJobPage() {
                   <label htmlFor="post-job-openings" className={labelClass}>
                     Number of Openings <span className="text-(--danger)">*</span>
                   </label>
-                  <div className="relative max-w-[200px]">
+                  <div className="relative max-w-50">
                     <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
                     <input
                       id="post-job-openings"
@@ -366,7 +367,7 @@ export default function PostJobPage() {
             </div>
 
             {/* ── Section 4: Extra ─────────────────────────── */}
-            <div className="rounded-[8px] bg-(--bg-card) border border-(--border) p-6">
+            <div className="rounded-lg bg-(--bg-card) border border-(--border) p-6">
               <SectionHeader icon={Sparkles} title="Extra" subtitle="Deadline, perks, and company info" />
 
               <div className="space-y-5">
@@ -374,7 +375,7 @@ export default function PostJobPage() {
                   <label htmlFor="post-job-deadline" className={labelClass}>
                     Application Deadline <span className="text-(--danger)">*</span>
                   </label>
-                  <div className="relative max-w-[300px]">
+                  <div className="relative max-w-75">
                     <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
                     <input
                       id="post-job-deadline"
@@ -406,7 +407,7 @@ export default function PostJobPage() {
                     value={formData.aboutCompany}
                     onChange={(e) => handleChange('aboutCompany', e.target.value)}
                     placeholder="Briefly describe your company, culture, and what makes it special..."
-                    className={`${inputClass} min-h-[100px] resize-y pb-8`}
+                    className={`${inputClass} min-h-25 resize-y pb-8`}
                     maxLength={500}
                   />
                   <CharCounter current={formData.aboutCompany.length} max={500} />
@@ -419,7 +420,7 @@ export default function PostJobPage() {
               id="post-job-submit"
               type="submit"
               disabled={isLoading}
-              className="mt-2 w-full rounded-[6px] bg-(--text-primary) px-4 py-3.5 font-sans text-[13px] font-bold tracking-widest uppercase text-(--bg-base) transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="mt-2 w-full rounded-md bg-(--text-primary) px-4 py-3.5 font-sans text-[13px] font-bold tracking-widest uppercase text-(--bg-base) transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -434,7 +435,7 @@ export default function PostJobPage() {
         </div>
 
         {/* Right Column: Preview Sticky */}
-        <div className="hidden lg:block lg:w-[35%] sticky top-[80px]">
+        <div className="sticky top-20 hidden lg:block lg:w-[35%]">
           <h3 className="font-sans text-[11px] font-semibold uppercase tracking-widest text-(--text-muted) mb-3">Live Preview</h3>
           <JobPreviewCard formData={formData} companyName={companyName} />
           <p className="mt-4 font-sans text-xs text-(--text-secondary) leading-relaxed">

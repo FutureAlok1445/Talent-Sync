@@ -8,9 +8,16 @@ import { getRecruiterFunnel } from '../../utils/formatters'
 import EmptyState from '../shared/EmptyState'
 import { SkeletonCard } from '../shared/Skeletons'
 
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
+
 const JobListItem = memo(function JobListItem({ job, onViewCandidates }) {
   return (
-    <article className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-[8px] border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)">
+    <article className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-(--border) bg-(--bg-card) p-4 transition-colors hover:border-(--border-strong) hover:bg-(--bg-subtle)">
       <div className="min-w-0 flex-1">
         <p className="truncate font-heading text-[16px] font-bold text-(--text-primary)">{job.title}</p>
         <p className="truncate font-sans text-[13px] text-(--text-secondary)">
@@ -20,7 +27,7 @@ const JobListItem = memo(function JobListItem({ job, onViewCandidates }) {
       <button
         type="button"
         onClick={() => onViewCandidates(job.id)}
-        className="rounded-[6px] border border-(--border-strong) bg-(--bg-base) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:bg-(--text-primary) hover:text-(--bg-base)"
+        className="rounded-md border border-(--border-strong) bg-(--bg-base) px-4 py-2 font-sans text-[13px] font-medium text-(--text-primary) transition-colors hover:bg-(--text-primary) hover:text-(--bg-base)"
       >
         View Candidates ({job.candidateCount || 0})
       </button>
@@ -58,7 +65,7 @@ export default function RecruiterDashboard() {
       setFunnel(getRecruiterFunnel(analyticsData?.totals || {}))
       
       if (jobResult.status === 'rejected') {
-        setError(jobResult.reason?.message || 'Some recruiter data could not be loaded.')
+        setError(toFriendlyMessage(jobResult.reason, 'Some recruiter data could not be loaded.'))
       }
       setLoading(false)
     }
@@ -67,7 +74,7 @@ export default function RecruiterDashboard() {
       if (!active) return
       setJobs([])
       setFunnel([])
-      setError(loadError?.message || 'Unable to load jobs right now.')
+      setError(toFriendlyMessage(loadError, 'Unable to load jobs right now.'))
       setLoading(false)
     })
 
@@ -89,7 +96,7 @@ export default function RecruiterDashboard() {
         <button
           type="button"
           onClick={() => navigate('/recruiter/post-job')}
-          className="flex items-center gap-2 rounded-[6px] bg-(--text-primary) px-4 py-2 font-sans text-[13px] font-medium text-(--bg-base) transition-opacity hover:opacity-90"
+          className="flex items-center gap-2 rounded-md bg-(--text-primary) px-4 py-2 font-sans text-[13px] font-medium text-(--bg-base) transition-opacity hover:opacity-90"
         >
           <Plus size={16} /> Post New Job
         </button>
@@ -129,7 +136,7 @@ export default function RecruiterDashboard() {
             {funnel.map((stage) => (
               <div
                 key={stage.key}
-                className="flex flex-col rounded-[8px] bg-(--bg-card) p-4 transition-colors hover:bg-(--bg-subtle) border border-(--border)"
+                className="flex flex-col rounded-lg bg-(--bg-card) p-4 transition-colors hover:bg-(--bg-subtle) border border-(--border)"
                 style={{ borderTop: '3px solid var(--accent-cyan)' }}
               >
                 <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.15em] text-(--text-muted)">
