@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import shap
 
-from app.ml.scorer import SIMILARITY_WEIGHT, ML_WEIGHT
+from app.ml.scorer import ML_WEIGHT, POLICY_WEIGHT, SIMILARITY_WEIGHT
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,8 @@ _FEATURE_TEMPLATES = {
         "negative": "The job domain differs from your target career area",
     },
     "skill_gap_score": {
-        "positive": "A high proportion of your skills align with what this job needs",
-        "negative": "Most of the required skills are not yet in your profile",
+        "positive": "Your required-skill gap appears manageable for this role",
+        "negative": "Your profile is still missing several required skills for this role",
     },
     "profile_completeness": {
         "positive": "Your profile is well-filled, giving the matcher more signal",
@@ -137,13 +137,14 @@ class MatchExplainer:
             self._to_human_readable(feat, val)
             for feat, val in sorted_features[:3]
         ]
+        final_score = self.scorer.score(student, job, similarity)
         return {
             "shap_values": shap_dict,
             "top_reasons": top_reasons,
             "score_breakdown": {
                 "similarity_score": round(float(similarity), 4),
                 "ml_score": 0.0,
-                "final_score": round(float(similarity), 4),
+                "final_score": round(float(final_score), 4),
             },
         }
 
@@ -186,9 +187,19 @@ class MatchExplainer:
             for feat, val in sorted_features[:3]
         ]
 
-        # Score breakdown
-        ml_score = float(self.scorer.model.predict_proba(features_2d)[0][1])
-        final_score = round(SIMILARITY_WEIGHT * similarity + ML_WEIGHT * ml_score, 4)
+        # Score breakdown (aligned with scorer blend)
+        model_input = features_2d
+        if self.scorer.scaler is not None:
+            model_input = self.scorer.scaler.transform(model_input)
+
+        ml_score = float(self.scorer.model.predict_proba(model_input)[0][1])
+        policy_score = self.scorer.policy_merit_score(features, similarity)
+        final_score = round(
+            (POLICY_WEIGHT * policy_score)
+            + (SIMILARITY_WEIGHT * similarity)
+            + (ML_WEIGHT * ml_score),
+            4,
+        )
 
         return {
             "shap_values": shap_dict,

@@ -17,7 +17,14 @@ from fastapi import APIRouter, Depends, Query
 
 from app.db.database import get_prisma
 from app.middleware.auth import get_current_user, require_role
-from app.schemas.job import JobCreate, JobListResponse, JobResponse, JobUpdate
+from app.schemas.job import (
+    JobCreate,
+    JobDescriptionDraftRequest,
+    JobDescriptionDraftResponse,
+    JobListResponse,
+    JobResponse,
+    JobUpdate,
+)
 from app.services import job_service
 
 router = APIRouter(tags=["jobs"])
@@ -34,6 +41,15 @@ async def create_job(
     """Create a new job posting. Recruiter only."""
     db = get_prisma()
     return await job_service.create_job(data, user["id"], db)
+
+
+@router.post("/generate-description", response_model=JobDescriptionDraftResponse)
+async def generate_job_description(
+    data: JobDescriptionDraftRequest,
+    user: dict = Depends(require_role("RECRUITER")),
+):
+    """Generate a realistic job description and candidate-fit explanation."""
+    return await job_service.generate_job_description_draft(data)
 
 
 # ── GET / ───────────────────────────────────────────────────

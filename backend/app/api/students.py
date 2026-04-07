@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from prisma.errors import FieldNotFoundError
 
 from app.db.database import get_prisma
 from app.middleware.auth import require_role
@@ -120,6 +121,7 @@ def _to_profile_response(user: dict, profile) -> StudentProfileResponse:
 		cgpa=profile.cgpa,
 		gpa=profile.cgpa,
 		location=profile.location,
+		preferredWorkMode=str(getattr(profile, 'preferredWorkMode', None)) if getattr(profile, 'preferredWorkMode', None) else None,
 		preferredRoles=profile.preferredRoles or [],
 		preferredLocations=profile.preferredLocations or [],
 		experienceLevel=profile.experienceLevel,
@@ -167,6 +169,8 @@ async def update_profile(
 		update_data["cgpa"] = payload.cgpa
 	if "location" in provided:
 		update_data["location"] = payload.location
+	if "preferred_work_mode" in provided:
+		update_data["preferredWorkMode"] = payload.preferred_work_mode
 	if "linkedin_url" in provided:
 		update_data["linkedinUrl"] = payload.linkedin_url
 	if "github_url" in provided:
@@ -198,10 +202,41 @@ async def update_profile(
 				update_data["resumeUrl"] = str(resume_url)
 
 	if update_data:
-		await prisma.studentprofile.update(
-			where={"id": profile.id},
-			data=update_data,
-		)
+		try:
+			await prisma.studentprofile.update(
+				where={"id": profile.id},
+				data=update_data,
+			)
+		except FieldNotFoundError:
+			# Backward-compat: older generated Prisma clients may not include
+			# newly added StudentProfile fields yet.
+			preferred_work_mode = update_data.get("preferredWorkMode")
+			legacy_update_data = {k: v for k, v in update_data.items() if k != "preferredWorkMode"}
+			if legacy_update_data:
+				await prisma.studentprofile.update(
+					where={"id": profile.id},
+					data=legacy_update_data,
+				)
+
+			# Try to persist preferred work mode via raw SQL when the DB column
+			# exists but the generated Prisma client is out of date.
+			if "preferredWorkMode" in update_data:
+				try:
+					if preferred_work_mode is None:
+						await prisma.execute_raw(
+							'UPDATE "StudentProfile" SET "preferredWorkMode" = NULL WHERE "id" = $1',
+							profile.id,
+						)
+					else:
+						await prisma.execute_raw(
+							'UPDATE "StudentProfile" SET "preferredWorkMode" = CAST($1 AS "WorkMode") WHERE "id" = $2',
+							preferred_work_mode,
+							profile.id,
+						)
+				except Exception:
+					# Ignore: environments without the migrated column should still
+					# be able to save the rest of the profile fields.
+					pass
 
 	if "skills" in provided and payload.skills is not None:
 		normalized_skills = _normalize_skill_names(payload.skills)

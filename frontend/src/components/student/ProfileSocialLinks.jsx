@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Link2, Plus, X, Save } from 'lucide-react'
 
 const MAX_LINKS = 6
 
@@ -51,12 +51,23 @@ export default function ProfileSocialLinks({
   }
 
   return (
-    <div className="flex flex-col rounded-[8px] border border-(--border) bg-(--bg-card) p-6 transition-colors hover:border-(--border-strong)" id="profile-social-links">
-      <div className="mb-6 flex items-center gap-3 border-b border-(--border) pb-4">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-(--accent-yellow) text-[11px] font-bold text-[#09090B]">
-          3
-        </span>
-        <h2 className="font-heading text-base font-bold text-(--text-primary)">Social Links</h2>
+    <div
+      className="profile-section-card"
+      style={{ '--card-accent': '#A855F7' }}
+      id="profile-social-links"
+    >
+      <div className="profile-section-header">
+        <div className="profile-section-icon" style={{ background: 'linear-gradient(135deg, #A855F7, #9333EA)' }}>
+          <Link2 size={18} />
+        </div>
+        <div>
+          <h2 className="font-heading text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+            Social Links
+          </h2>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Connect your online presence
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -72,22 +83,31 @@ export default function ProfileSocialLinks({
                     ? 'https://linkedin.com/in/...'
                     : 'https://github.com/...'
                 }
-                className="w-full flex-1 rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+                className="profile-input flex-1"
                 type="url"
               />
               {idx > 0 && (
                 <button
                   type="button"
                   onClick={() => removeLink(idx)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] text-(--text-muted) hover:bg-(--bg-subtle) hover:text-(--danger) transition-colors"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
                   aria-label="Remove link"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                    e.currentTarget.style.color = 'var(--danger)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = 'var(--text-muted)'
+                  }}
                 >
                   <X size={16} />
                 </button>
               )}
             </div>
             {linkErrors[idx] && (
-              <p className="mt-1.5 text-[12px] font-medium text-(--danger)">{linkErrors[idx]}</p>
+              <p className="mt-1.5 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{linkErrors[idx]}</p>
             )}
           </div>
         ))}
@@ -97,23 +117,38 @@ export default function ProfileSocialLinks({
         <button
           type="button"
           onClick={addLink}
-          className="mt-4 flex w-fit items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-[12px] font-medium uppercase tracking-wider text-(--text-secondary) hover:bg-(--bg-subtle) hover:text-(--text-primary) transition-colors"
+          className="mt-4 flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all"
+          style={{
+            color: 'var(--text-secondary)',
+            border: '1px dashed var(--border)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-yellow)'
+            e.currentTarget.style.color = 'var(--text-primary)'
+            e.currentTarget.style.background = 'rgba(255, 225, 53, 0.05)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border)'
+            e.currentTarget.style.color = 'var(--text-secondary)'
+            e.currentTarget.style.background = 'transparent'
+          }}
         >
           <Plus size={14} /> Add Link
         </button>
       )}
 
       {error && (
-        <p className="mt-3 text-[12px] font-medium text-(--danger)">{error}</p>
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
 
-      <div className="mt-6 flex justify-end border-t border-(--border) pt-4">
+      <div className="mt-6 flex justify-end pt-4" style={{ borderTop: '1px solid var(--border)' }}>
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="rounded-[6px] bg-(--text-primary) px-4 py-2 font-sans text-[12px] font-medium text-(--bg-base) hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="profile-save-btn"
         >
+          <Save size={14} />
           {saving ? 'Saving…' : 'Save Links'}
         </button>
       </div>

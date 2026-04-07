@@ -11,6 +11,11 @@ export const jobService = {
     return res.data
   },
 
+  generateDescription: async (payload) => {
+    const res = await apiClient.post('/api/jobs/generate-description', payload)
+    return res.data
+  },
+
   // Backward-compatible alias for screens still calling getAllJobs().
   getAllJobs: async (filters = {}) => {
     const params = new URLSearchParams()

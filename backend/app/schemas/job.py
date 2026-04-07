@@ -9,7 +9,7 @@ import math
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 ExperienceLevelType = Literal["FRESHER", "INTERN", "JUNIOR", "MID", "SENIOR"]
@@ -109,6 +109,92 @@ class JobUpdate(BaseModel):
         return cleaned
 
 
+class JobDescriptionDraftRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    job_title: str = Field(..., min_length=2, max_length=120)
+    company: str = Field(
+        default="Hiring Company",
+        min_length=2,
+        max_length=120,
+        validation_alias=AliasChoices("company", "company_name"),
+    )
+    location: str = Field(..., min_length=2, max_length=120)
+    job_type: str = Field(default="Internship", min_length=2, max_length=40)
+    required_skills: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+        validation_alias=AliasChoices("required_skills", "skills", "job_required_skills"),
+    )
+    experience_level: str = Field(
+        ...,
+        min_length=2,
+        max_length=80,
+        validation_alias=AliasChoices("experience_level", "experience"),
+    )
+    domain: str = Field(..., min_length=2, max_length=120)
+
+    candidate_skills: list[str] = Field(default_factory=list, max_length=30)
+    candidate_experience: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    candidate_cgpa: Optional[float] = Field(default=None, ge=0, le=10)
+    candidate_backlogs: Optional[int] = Field(default=None, ge=0, le=50)
+
+    @field_validator("required_skills", "candidate_skills")
+    @classmethod
+    def validate_and_normalize_skills(
+        cls,
+        v: list[str] | None,
+    ) -> list[str] | None:
+        if v is None:
+            return None
+        seen: set[str] = set()
+        cleaned: list[str] = []
+        for skill in v:
+            normalized = str(skill).strip()
+            if not normalized:
+                continue
+            lowered = normalized.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            cleaned.append(normalized)
+        return cleaned
+
+
+class JobDescriptionEligibility(BaseModel):
+    cgpa: str
+    backlogs: str
+    branch: str
+
+
+class JobDescriptionInternshipDetails(BaseModel):
+    duration: str
+    stipend: str
+    mode: str
+
+
+class JobDescriptionAIInsights(BaseModel):
+    match_reason: str
+    improvement_suggestion: str
+
+
+class JobDescriptionDraftResponse(BaseModel):
+    job_title: str
+    company: str
+    location: str
+    job_type: str
+    company_overview: str
+    role_summary: str
+    responsibilities: list[str]
+    required_skills: list[str]
+    preferred_skills: list[str]
+    eligibility: JobDescriptionEligibility
+    internship_details: JobDescriptionInternshipDetails
+    learning_opportunities: list[str]
+    ai_insights: JobDescriptionAIInsights
+
+
 # ── Response Schemas ────────────────────────────────────────
 
 
@@ -129,8 +215,12 @@ class JobResponse(BaseModel):
     deadline: Optional[datetime] = None
     perks: list[str] = Field(default_factory=list)
     aboutCompany: Optional[str] = None
+    minCgpa: Optional[float] = None
+    eligibleBranches: list[str] = Field(default_factory=list)
     isActive: bool
+    companyName: str = ""
     recruiterName: str = ""
+    recruiterEmail: str = ""
     applicationCount: int = 0
     createdAt: datetime
     updatedAt: datetime

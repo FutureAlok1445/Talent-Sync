@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { applicationService } from '../../services/applicationService'
 import { matchService } from '../../services/matchService'
-import { buildMatchNarrative, topShapReasons } from '../../utils/formatters'
+import { buildMatchNarrative, formatFeatureLabel, topShapReasons } from '../../utils/formatters'
 import EmptyState from '../shared/EmptyState'
 import MatchRing from '../shared/MatchRing'
 import SHAPChart from '../shared/SHAPChart'
@@ -37,7 +37,7 @@ export default function CandidateDetailPage() {
   const [reloadTick, setReloadTick] = useState(0)
   const [status, setStatus] = useState('APPLIED')
   const [statusSaving, setStatusSaving] = useState(false)
-  const topReasons = useMemo(() => topShapReasons(candidate?.shapValues, 2), [candidate?.shapValues])
+  const topReasons = useMemo(() => topShapReasons(candidate?.shapValues, 2, 0.01), [candidate?.shapValues])
 
   useEffect(() => {
     let active = true
@@ -161,7 +161,7 @@ export default function CandidateDetailPage() {
                 {topReasons.length ? (
                   topReasons.map((reason) => (
                     <p key={reason.feature} className="font-sans text-[13px] text-(--text-primary)">
-                      <span className="font-semibold">{reason.feature}</span>: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}
+                      <span className="font-semibold">{reason.label || formatFeatureLabel(reason.feature)}</span>: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}
                     </p>
                   ))
                 ) : (
@@ -184,7 +184,7 @@ export default function CandidateDetailPage() {
                   disabled={statusSaving || action.value === status}
                   onClick={() => onUpdateStatus(action.value)}
                   className={`rounded-md px-4 py-2 font-sans text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50
-                    ${action.value === status 
+                    ${action.value === status
                       ? 'border border-(--border-strong) bg-(--bg-subtle) text-(--text-secondary)'
                       : 'border border-(--border-strong) bg-(--bg-base) text-(--text-primary) hover:bg-(--text-primary) hover:text-(--bg-base)'
                     }

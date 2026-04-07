@@ -49,20 +49,6 @@ export const getMatchColor = (score) => {
 	return "#EF4444"; // Danger Red
 };
 
-export const topShapReasons = (shapValues, count = 2) => {
-	if (!shapValues || typeof shapValues !== "object") {
-		return [];
-	}
-
-	return Object.entries(shapValues)
-		.map(([feature, value]) => ({
-			feature,
-			value: Number(value) || 0,
-		}))
-		.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-		.slice(0, Math.max(1, count));
-};
-
 const FEATURE_LABELS = {
 	projects: "project experience",
 	react: "React skill",
@@ -76,26 +62,64 @@ const FEATURE_LABELS = {
 	"domain fit": "domain familiarity",
 	communication: "communication signals",
 	gpa: "academic profile",
+
+	// TalentSync scorer features
+	sbert_similarity: "semantic profile similarity",
+	semantic_score: "role text alignment",
+	skill_overlap_ratio: "required skill overlap",
+	skill_gap_score: "required skill gap",
+	experience_score: "experience fit",
+	experience_months: "practical experience",
+	experience_gap: "experience gap",
+	preference_score: "role and location preference fit",
+	location_match: "location fit",
+	domain_match: "domain alignment",
+	profile_completeness: "profile completeness",
+	backlog_penalty: "academic backlog impact",
+	branch_eligible: "branch eligibility",
+	cgpa_normalized: "CGPA baseline",
+	cgpa_meets_threshold: "CGPA threshold eligibility",
+};
+
+export const formatFeatureLabel = (feature) => {
+	const key = String(feature || "").trim().toLowerCase();
+	if (!key) {
+		return "profile signals";
+	}
+	return FEATURE_LABELS[key] || String(feature).replace(/_/g, " ");
+};
+
+export const topShapReasons = (shapValues, count = 2, minAbs = 0) => {
+	if (!shapValues || typeof shapValues !== "object") {
+		return [];
+	}
+
+	const entries = Object.entries(shapValues)
+		.map(([feature, value]) => ({
+			feature,
+			value: Number(value) || 0,
+		}))
+		.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+
+	const impactful = entries.filter((entry) => Math.abs(entry.value) >= Math.max(0, Number(minAbs) || 0));
+	const source = impactful.length ? impactful : entries;
+
+	return source.slice(0, Math.max(1, count)).map((entry) => ({
+		...entry,
+		label: formatFeatureLabel(entry.feature),
+	}));
 };
 
 const STUDENT_PIPELINE = ["APPLIED", "REVIEWED", "SHORTLISTED", "SELECTED"];
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 
-const toFeatureLabel = (feature) => {
-	const key = String(feature || "").trim().toLowerCase();
-	if (!key) {
-		return "profile signals";
-	}
-	return FEATURE_LABELS[key] || String(feature);
-};
-
 export const strongestShapFactor = (shapValues) => {
-	return topShapReasons(shapValues, 1)[0] || null;
+	return topShapReasons(shapValues, 1, 0.01)[0] || topShapReasons(shapValues, 1)[0] || null;
 };
 
 export const weakestShapFactor = (shapValues) => {
-	const entries = topShapReasons(shapValues, 32);
+	const entries = topShapReasons(shapValues, 32, 0.01);
 	if (!entries.length) {
 		return null;
 	}
@@ -107,7 +131,7 @@ export const explainFactor = (factor) => {
 		return "No strong factor identified yet.";
 	}
 
-	const label = toFeatureLabel(factor.feature);
+	const label = formatFeatureLabel(factor.feature);
 	if ((Number(factor.value) || 0) >= 0) {
 		return `${label} is helping this match.`;
 	}
@@ -128,7 +152,7 @@ export const buildMatchNarrative = (match) => {
 		return "This match is based on profile fit, skills, and academic indicators.";
 	}
 
-	const label = toFeatureLabel(strongest.feature);
+	const label = formatFeatureLabel(strongest.feature);
 	return `This match is stronger because your ${label} aligns with role requirements.`;
 };
 

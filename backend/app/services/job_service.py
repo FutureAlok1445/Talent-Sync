@@ -6,13 +6,23 @@ Recruiter ownership is validated via RecruiterProfile lookup by userId.
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
 from prisma import Prisma
 
-from app.schemas.job import JobCreate, JobListResponse, JobResponse, JobUpdate
+from app.schemas.job import (
+    JobCreate,
+    JobDescriptionDraftRequest,
+    JobDescriptionDraftResponse,
+    JobListResponse,
+    JobResponse,
+    JobUpdate,
+)
+from app.services import llm_provider
 
 
 # ── Helpers ─────────────────────────────────────────────────
@@ -36,8 +46,18 @@ def _serialize_job(job: Any) -> JobResponse:
         skills = [js.skill.name for js in job.jobSkills if js.skill]
 
     recruiter_name = ""
+    recruiter_email = ""
+    company_name = ""
     if hasattr(job, "recruiter") and job.recruiter:
-        recruiter_name = job.recruiter.fullName or job.recruiter.companyName or ""
+        recruiter_name = job.recruiter.fullName or ""
+        company_name = getattr(job.recruiter, "companyName", "") or ""
+
+        recruiter_user = getattr(job.recruiter, "user", None)
+        if recruiter_user:
+            recruiter_email = getattr(recruiter_user, "email", "") or ""
+
+        if not recruiter_name:
+            recruiter_name = company_name
 
     app_count = 0
     if hasattr(job, "applications") and job.applications is not None:
@@ -60,8 +80,12 @@ def _serialize_job(job: Any) -> JobResponse:
         deadline=job.deadline,
         perks=job.perks or [],
         aboutCompany=job.aboutCompany,
+        minCgpa=getattr(job, "minCgpa", None),
+        eligibleBranches=getattr(job, "eligibleBranches", []),
         isActive=job.isActive,
+        companyName=company_name,
         recruiterName=recruiter_name,
+        recruiterEmail=recruiter_email,
         applicationCount=app_count,
         createdAt=job.createdAt,
         updatedAt=job.updatedAt,
@@ -69,10 +93,304 @@ def _serialize_job(job: Any) -> JobResponse:
 
 
 _JOB_INCLUDES = {
-    "recruiter": True,
+    "recruiter": {"include": {"user": True}},
     "jobSkills": {"include": {"skill": True}},
     "applications": True,
 }
+
+
+def _normalize_skill_list(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for value in values:
+        item = str(value).strip()
+        if not item:
+            continue
+        lowered = item.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        cleaned.append(item)
+    return cleaned
+
+
+def _infer_work_mode(location: str) -> str:
+    text = (location or "").strip().lower()
+    if "remote" in text:
+        return "Remote"
+    if "hybrid" in text:
+        return "Hybrid"
+    return "On-site"
+
+
+def _normalize_job_type(job_type: str) -> str:
+    value = (job_type or "").strip().lower()
+    if value in {"full-time", "full time", "full_time", "fulltime"}:
+        return "Full-time"
+    if value in {"part-time", "part time", "part_time", "parttime"}:
+        return "Part-time"
+    if value in {"contract", "contractual"}:
+        return "Contract"
+    if value in {"internship", "intern", "trainee"}:
+        return "Internship"
+    return job_type.strip() if job_type and job_type.strip() else "Internship"
+
+
+def _preferred_skills(domain: str, required_skills: list[str]) -> list[str]:
+    base = [
+        "Git and collaborative workflows",
+        "Basic testing and debugging discipline",
+        "Clear communication in team standups",
+    ]
+
+    domain_key = (domain or "").strip().lower()
+    if "data" in domain_key or "ai" in domain_key or "ml" in domain_key:
+        base.extend(["SQL and data analysis", "Experiment tracking and model evaluation"])
+    elif "frontend" in domain_key or "web" in domain_key:
+        base.extend(["Responsive UI fundamentals", "Browser debugging and performance basics"])
+    elif "backend" in domain_key or "platform" in domain_key:
+        base.extend(["REST API design fundamentals", "Database query optimization basics"])
+    else:
+        base.extend(["Product thinking", "Documentation and handover quality"])
+
+    required_lower = {skill.lower() for skill in required_skills}
+    filtered: list[str] = []
+    for item in base:
+        if item.lower() in required_lower:
+            continue
+        filtered.append(item)
+    return filtered[:3]
+
+
+def _candidate_insights(data: JobDescriptionDraftRequest, required_skills: list[str]) -> tuple[str, str]:
+    candidate_skills = _normalize_skill_list(data.candidate_skills)
+    candidate_skill_map = {skill.lower(): skill for skill in candidate_skills}
+
+    matched = [
+        candidate_skill_map[skill.lower()]
+        for skill in required_skills
+        if skill.lower() in candidate_skill_map
+    ]
+    missing = [
+        skill
+        for skill in required_skills
+        if skill.lower() not in candidate_skill_map
+    ]
+
+    strengths = ", ".join(matched[:3]) if matched else "core problem-solving and learning agility"
+    candidate_experience = (data.candidate_experience or data.experience_level).strip()
+    cgpa_text = f"{data.candidate_cgpa:.1f}" if data.candidate_cgpa is not None else "not specified"
+
+    if data.candidate_backlogs is None:
+        backlog_text = "not shared"
+    elif data.candidate_backlogs == 0:
+        backlog_text = "no active backlogs"
+    else:
+        backlog_text = f"{data.candidate_backlogs} active"
+
+    improvement_area = missing[0] if missing else "deeper ownership on production-scale projects"
+
+    match_reason = (
+        f"Strong alignment on {strengths}; candidate experience ({candidate_experience}) supports practical execution. "
+        f"CGPA ({cgpa_text}) and backlogs ({backlog_text}) are treated as baseline checks, not primary ranking signals."
+    )
+    improvement_suggestion = (
+        f"Improve fit by building one focused project demonstrating {improvement_area}, including measurable outcomes and deployment evidence."
+    )
+    return match_reason, improvement_suggestion
+
+
+def _fallback_job_description(data: JobDescriptionDraftRequest, required_skills: list[str]) -> JobDescriptionDraftResponse:
+    role = data.job_title.strip()
+    company = (data.company or "Hiring Company").strip()
+    domain = data.domain.strip()
+    location = data.location.strip()
+    job_type = _normalize_job_type(data.job_type)
+    work_mode = _infer_work_mode(location)
+
+    required = required_skills[:10]
+    preferred = _preferred_skills(domain, required)
+    responsibilities = [
+        f"Develop and improve {domain} features for the {role} roadmap under mentor guidance.",
+        "Translate product requirements into clean, testable modules with clear documentation.",
+        "Collaborate in sprint planning, code reviews, and defect-resolution cycles.",
+        "Track task progress, communicate blockers early, and deliver within agreed timelines.",
+        "Contribute to quality improvements through testing, monitoring, and iterative fixes.",
+    ]
+
+    match_reason, improvement_suggestion = _candidate_insights(data, required)
+
+    return JobDescriptionDraftResponse(
+        job_title=role,
+        company=company,
+        location=location,
+        job_type=job_type,
+        company_overview=(
+            f"{company} builds practical products in the {domain} domain and values ownership, collaboration, and measurable delivery quality."
+        ),
+        role_summary=(
+            f"This {job_type.lower()} role focuses on shipping production-relevant outcomes, strengthening core engineering skills, and learning through real project cycles."
+        ),
+        responsibilities=responsibilities,
+        required_skills=required,
+        preferred_skills=preferred,
+        eligibility={
+            "cgpa": "6.0+ preferred as baseline eligibility; practical skills and project quality carry higher weight.",
+            "backlogs": "No active backlogs preferred; up to 1 may be considered with strong technical evidence.",
+            "branch": "CS/IT/ECE and related branches preferred; skill-strong candidates from other branches are encouraged.",
+        },
+        internship_details={
+            "duration": "3 to 6 months" if job_type == "Internship" else "Not applicable",
+            "stipend": "INR 15,000 to 35,000 per month" if job_type == "Internship" else "Compensation as per company standards",
+            "mode": f"{work_mode} ({location})",
+        },
+        learning_opportunities=[
+            "Hands-on exposure to production workflows, code reviews, and release practices.",
+            "Mentorship on architecture decisions, debugging strategy, and delivery quality.",
+            "Portfolio-ready outcomes with clear business impact and implementation ownership.",
+        ],
+        ai_insights={
+            "match_reason": match_reason,
+            "improvement_suggestion": improvement_suggestion,
+        },
+    )
+
+
+def _extract_json_payload(text: str) -> dict[str, Any] | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    fenced_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw, flags=re.IGNORECASE | re.DOTALL)
+    if fenced_match:
+        raw = fenced_match.group(1).strip()
+
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            parsed = json.loads(raw[start:end + 1])
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _merge_generated_with_fallback(
+    payload: dict[str, Any],
+    fallback: JobDescriptionDraftResponse,
+) -> JobDescriptionDraftResponse | None:
+    fallback_data = fallback.model_dump()
+
+    for key, value in payload.items():
+        if key not in fallback_data:
+            continue
+        if isinstance(fallback_data[key], dict) and isinstance(value, dict):
+            nested = fallback_data[key]
+            for nested_key, nested_value in value.items():
+                if nested_key in nested and nested_value not in (None, "", []):
+                    nested[nested_key] = nested_value
+            fallback_data[key] = nested
+            continue
+        if value not in (None, "", []):
+            fallback_data[key] = value
+
+    try:
+        return JobDescriptionDraftResponse.model_validate(fallback_data)
+    except Exception:
+        return None
+
+
+async def generate_job_description_draft(
+    data: JobDescriptionDraftRequest,
+) -> JobDescriptionDraftResponse:
+    """Generate a recruiter-ready structured JD object for frontend rendering."""
+    required_skills = _normalize_skill_list(data.required_skills)
+
+    fallback_payload = _fallback_job_description(data, required_skills)
+
+    system_prompt = (
+        "You are an AI assistant for TalentSync, an intelligent internship recommendation platform. "
+        "Generate professional, realistic, frontend-ready job descriptions. "
+        "Avoid exaggerated claims and keep language concise and practical."
+    )
+
+    prompt = (
+        "Generate content for TalentSync using the exact required JSON schema.\n\n"
+        "INPUT:\n"
+        f"- Job Title: {data.job_title}\n"
+        f"- Company Name: {data.company}\n"
+        f"- Location: {data.location}\n"
+        f"- Job Type: {_normalize_job_type(data.job_type)}\n"
+        f"- Required Skills: {', '.join(required_skills)}\n"
+        f"- Experience Level: {data.experience_level}\n"
+        f"- Domain: {data.domain}\n"
+        f"- Candidate Skills: {', '.join(_normalize_skill_list(data.candidate_skills)) or 'Not provided'}\n"
+        f"- Candidate Experience: {data.candidate_experience or data.experience_level}\n"
+        f"- Candidate CGPA: {data.candidate_cgpa if data.candidate_cgpa is not None else 'Not provided'}\n"
+        f"- Candidate Backlogs: {data.candidate_backlogs if data.candidate_backlogs is not None else 'Not provided'}\n\n"
+        "OUTPUT FORMAT (STRICT JSON):\n"
+        "{\n"
+        "  \"job_title\": \"\",\n"
+        "  \"company\": \"\",\n"
+        "  \"location\": \"\",\n"
+        "  \"job_type\": \"\",\n"
+        "  \"company_overview\": \"\",\n"
+        "  \"role_summary\": \"\",\n"
+        "  \"responsibilities\": [\"\", \"\", \"\"],\n"
+        "  \"required_skills\": [\"\", \"\"],\n"
+        "  \"preferred_skills\": [\"\", \"\"],\n"
+        "  \"eligibility\": {\n"
+        "    \"cgpa\": \"\",\n"
+        "    \"backlogs\": \"\",\n"
+        "    \"branch\": \"\"\n"
+        "  },\n"
+        "  \"internship_details\": {\n"
+        "    \"duration\": \"\",\n"
+        "    \"stipend\": \"\",\n"
+        "    \"mode\": \"\"\n"
+        "  },\n"
+        "  \"learning_opportunities\": [\"\", \"\"],\n"
+        "  \"ai_insights\": {\n"
+        "    \"match_reason\": \"\",\n"
+        "    \"improvement_suggestion\": \"\"\n"
+        "  }\n"
+        "}\n\n"
+        "GUIDELINES:\n"
+        "1. Keep tone professional (LinkedIn/Internshala style).\n"
+        "2. Keep language concise and frontend-friendly.\n"
+        "3. Prioritize skills and practical experience over CGPA.\n"
+        "4. Keep CGPA as basic eligibility only.\n"
+        "5. Responsibilities must be realistic and execution-focused.\n"
+        "6. Do not fabricate achievements or company claims.\n"
+        "7. Return only valid JSON and no surrounding explanation."
+    )
+
+    try:
+        llm_text = await llm_provider.generate(
+            prompt=prompt,
+            history=[],
+            system_prompt=system_prompt,
+        )
+        if llm_text.strip() and llm_text.strip() != llm_provider.FALLBACK_RESPONSE:
+            payload = _extract_json_payload(llm_text)
+            if payload:
+                merged = _merge_generated_with_fallback(payload, fallback_payload)
+                if merged:
+                    return merged
+    except Exception:
+        pass
+
+    return fallback_payload
 
 
 # ── Core Service Functions ──────────────────────────────────
@@ -124,6 +442,8 @@ async def create_job(data: JobCreate, user_id: str, db: Prisma) -> JobResponse:
             "openings": data.openings,
             "perks": data.perks or [],
             "aboutCompany": data.aboutCompany or profile.bio or "",
+            "minCgpa": data.minCgpa,
+            "eligibleBranches": data.eligibleBranches or [],
             "deadline": datetime.combine(data.deadline, datetime.min.time(), tzinfo=timezone.utc),
             "isActive": True,
             "jobSkills": {

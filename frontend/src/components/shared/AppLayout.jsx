@@ -71,6 +71,11 @@ export default function AppLayout() {
       const saved = localStorage.getItem('ts-theme') || 'light'
       document.documentElement.classList.toggle('dark', saved === 'dark')
     } catch {}
+
+    // Auth pages use their own visual language; clear global dark state on logout/unmount.
+    return () => {
+      document.documentElement.classList.remove('dark')
+    }
   }, [])
 
   // Keyboard shortcuts: Cmd+/ → open Career AI, Escape → close

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, Send, X, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react'
+import { MessageSquare, Send, X, RefreshCw, Sparkles, AlertTriangle, Bot, ArrowDown, TrendingUp, Target, Zap, UserCheck } from 'lucide-react'
 import { chatbotService } from '../../services/chatbotService'
 import { useUIStore } from '../../store/uiStore'
 
 const DEFAULT_PROMPTS = [
-  'How can I improve my match score?',
-  'What should I learn next?',
-  'How do I get shortlisted faster?',
-  'Profile improvement tips?',
+  { text: 'How can I improve my match score?', icon: TrendingUp, color: '#A78BFA' },
+  { text: 'What should I learn next?', icon: Target, color: '#F472B6' },
+  { text: 'How do I get shortlisted faster?', icon: Zap, color: '#FB923C' },
+  { text: 'Profile improvement tips?', icon: UserCheck, color: '#FFE135' },
 ]
 
 const PANEL_STORAGE_KEY = 'talentsync:aipanel:width'
@@ -32,6 +32,44 @@ function getStoredPanelWidth() {
 
 const ASSISTANT_SESSION_KEY = 'talentsync:assistant:session'
 
+/* ── Typing Indicator ── */
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start">
+      <div className="mr-2 mt-1 shrink-0" style={{ width: 28, height: 28 }}>
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{
+            background: 'linear-gradient(135deg, #FFE135, #FFB800)',
+          }}
+        >
+          <Bot size={14} color="#09090B" />
+        </div>
+      </div>
+      <div
+        className="flex items-center gap-1.5 rounded-2xl rounded-tl-md px-4 py-3"
+        style={{
+          background: 'var(--bg-subtle)',
+          border: '1px solid var(--border)',
+        }}
+      >
+        <span className="ai-typing-dot" style={{ animationDelay: '0ms' }} />
+        <span className="ai-typing-dot" style={{ animationDelay: '150ms' }} />
+        <span className="ai-typing-dot" style={{ animationDelay: '300ms' }} />
+      </div>
+    </div>
+  )
+}
+
+/* ── Time stamp ── */
+function getTimeStamp() {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date())
+}
+
 export default function CareerAIPanel() {
   const { aiPanelOpen, toggleAIPanel } = useUIStore()
   const [panelWidth, setPanelWidth] = useState(getStoredPanelWidth())
@@ -43,6 +81,7 @@ export default function CareerAIPanel() {
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [requestError, setRequestError] = useState('')
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
   
   const messagesContainerRef = useRef(null)
   const textareaRef = useRef(null)
@@ -82,11 +121,26 @@ export default function CareerAIPanel() {
 
   useEffect(() => () => stopResizing(), [stopResizing])
 
+  const scrollToBottom = useCallback(() => {
+    const node = messagesContainerRef.current
+    if (node) node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => {
+    if (aiPanelOpen) scrollToBottom()
+  }, [aiPanelOpen, messages, scrollToBottom])
+
+  // Scroll detection for "scroll to bottom" button
   useEffect(() => {
     const node = messagesContainerRef.current
-    if (!node || !aiPanelOpen) return
-    node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
-  }, [aiPanelOpen, messages])
+    if (!node) return
+    const onScroll = () => {
+      const distFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+      setShowScrollBtn(distFromBottom > 100)
+    }
+    node.addEventListener('scroll', onScroll)
+    return () => node.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     const node = textareaRef.current
@@ -121,7 +175,7 @@ export default function CareerAIPanel() {
   const sendMessage = async (rawMessage) => {
     const text = String(rawMessage || '').trim()
     if (!text || isSending) return
-    setMessages((prev) => [...prev, { role: 'user', content: text }])
+    setMessages((prev) => [...prev, { role: 'user', content: text, time: getTimeStamp() }])
     setInput('')
     setRequestError('')
     setIsSending(true)
@@ -130,7 +184,7 @@ export default function CareerAIPanel() {
       const response = await chatbotService.sendMessage(text, sessionId, { forceAssistant: true })
       if (response?.session_id) setSessionId(response.session_id)
       const responseText = String(response?.response || '').trim() || 'I could not generate a response. Try rephrasing.'
-      setMessages((prev) => [...prev, { role: 'assistant', content: responseText }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: responseText, time: getTimeStamp() }])
     } catch {
       setRequestError('offline')
     } finally {
@@ -143,15 +197,23 @@ export default function CareerAIPanel() {
     await sendMessage(input)
   }
 
+  const clearSession = () => {
+    window.localStorage.removeItem(ASSISTANT_SESSION_KEY)
+    setSessionId(null)
+    setMessages([])
+  }
+
   return (
     <div
-      className={`fixed right-0 top-0 bottom-0 z-30 flex flex-col bg-(--bg-card) border-l border-(--border) shadow-2xl transition-transform duration-500 ease-in-out ${
+      className={`fixed right-0 top-0 bottom-0 z-30 flex flex-col border-l shadow-2xl transition-transform duration-500 ease-in-out ${
         aiPanelOpen ? 'translate-x-0' : 'translate-x-full'
       } md:relative md:z-0 md:translate-x-0`}
       style={{
         width: `${panelWidth}px`,
         marginRight: aiPanelOpen ? 0 : `-${panelWidth}px`,
-        display: !aiPanelOpen && typeof window !== 'undefined' && window.innerWidth < 768 ? 'none' : 'flex'
+        display: !aiPanelOpen && typeof window !== 'undefined' && window.innerWidth < 768 ? 'none' : 'flex',
+        background: 'var(--bg-card)',
+        borderColor: 'var(--border)',
       }}
     >
       {/* Resizer Handle */}
@@ -159,123 +221,324 @@ export default function CareerAIPanel() {
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize group z-10"
         onPointerDown={startResizing}
       >
-        <div className="absolute inset-y-0 left-0 w-px bg-transparent group-hover:bg-(--accent-yellow) transition-colors" />
+        <div
+          className="absolute inset-y-0 left-0 w-px transition-colors"
+          style={{ background: 'transparent' }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-yellow)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        />
       </div>
 
-      <header className="flex h-16 items-center justify-between border-b border-(--border) bg-(--bg-card)/80 backdrop-blur-md px-5 shrink-0">
+      {/* ── HEADER ── */}
+      <header
+        className="flex items-center justify-between shrink-0 px-5"
+        style={{
+          height: 64,
+          borderBottom: '1px solid var(--border)',
+          background: 'rgba(24, 24, 27, 0.5)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--bg-subtle) text-(--accent-yellow)">
-            <Sparkles size={18} />
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            style={{
+              background: 'linear-gradient(135deg, #FFE135, #FFB800)',
+              boxShadow: '0 2px 8px rgba(255, 225, 53, 0.3)',
+            }}
+          >
+            <Sparkles size={18} color="#09090B" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-heading text-[15px] font-bold tracking-tight text-(--text-primary)">Career AI</h2>
-            <p className="font-sans text-[11px] text-(--text-muted) truncate">Expert guidance & matching insights</p>
+            <h2 className="font-heading text-[15px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              Career AI
+            </h2>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: requestError ? 'var(--danger)' : 'var(--success)' }}
+              />
+              <p className="font-sans text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                {requestError ? 'Offline' : 'Online • Ready to help'}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => {
-              window.localStorage.removeItem(ASSISTANT_SESSION_KEY)
-              setSessionId(null)
-              setMessages([])
+            onClick={clearSession}
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+            style={{
+              color: 'var(--text-muted)',
+              border: '1px solid transparent',
             }}
-            className="flex h-8 w-8 items-center justify-center rounded border border-transparent text-(--text-muted) hover:border-(--border) hover:bg-(--bg-card) transition-colors"
-            title="Clear context"
+            title="New conversation"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)'
+              e.currentTarget.style.background = 'var(--bg-subtle)'
+              e.currentTarget.style.color = 'var(--text-primary)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'transparent'
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = 'var(--text-muted)'
+            }}
           >
             <RefreshCw size={14} />
           </button>
           <button
             type="button"
             onClick={toggleAIPanel}
-            className="flex h-8 w-8 items-center justify-center rounded border border-transparent text-(--text-secondary) hover:border-(--border) hover:bg-(--bg-card) transition-colors md:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all md:hidden"
+            style={{
+              color: 'var(--text-secondary)',
+              border: '1px solid transparent',
+            }}
             aria-label="Close panel"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)'
+              e.currentTarget.style.background = 'var(--bg-subtle)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'transparent'
+              e.currentTarget.style.background = 'transparent'
+            }}
           >
             <X size={16} />
           </button>
         </div>
       </header>
 
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth" style={{ scrollbarWidth: 'none' }}>
+      {/* ── MESSAGES AREA ── */}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-5 space-y-5 scroll-smooth relative"
+        style={{ scrollbarWidth: 'none' }}
+      >
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center px-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-(--border) bg-(--bg-subtle) text-(--accent-yellow) mb-4">
-              <MessageSquare size={24} />
+          /* ── EMPTY STATE ── */
+          <div className="flex h-full flex-col items-center justify-center text-center px-4">
+            {/* Animated icon */}
+            <div
+              className="relative mb-5"
+              style={{ animation: 'chatbotFloat 3s ease-in-out infinite' }}
+            >
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255, 225, 53, 0.15), rgba(255, 184, 0, 0.08))',
+                  border: '1px solid rgba(255, 225, 53, 0.2)',
+                }}
+              >
+                <Sparkles size={28} style={{ color: 'var(--accent-yellow)' }} />
+              </div>
+              {/* Sparkle dots */}
+              <div
+                className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full"
+                style={{
+                  background: 'var(--accent-yellow)',
+                  animation: 'chatbotPulse 2s ease-in-out infinite',
+                }}
+              />
+              <div
+                className="absolute -bottom-0.5 -left-1 h-1.5 w-1.5 rounded-full"
+                style={{
+                  background: 'var(--accent-cyan)',
+                  animation: 'chatbotPulse 2s ease-in-out 0.5s infinite',
+                }}
+              />
             </div>
-            <p className="font-heading text-[15px] font-bold text-(--text-primary)">How can I help you today?</p>
-            <p className="mt-2 text-[13px] text-(--text-muted) leading-relaxed">
-              Ask about match scores, skill improvements, or application status.
+
+            <p className="font-heading text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>
+              How can I help you today?
             </p>
+            <p className="mt-2 text-[13px] leading-relaxed max-w-[260px]" style={{ color: 'var(--text-muted)' }}>
+              Ask about match scores, skill improvements, or application strategies.
+            </p>
+
+            {/* Quick action grid */}
+            <div className="mt-6 grid grid-cols-2 gap-2 w-full max-w-[300px]">
+              {DEFAULT_PROMPTS.map((prompt) => {
+                const IconComp = prompt.icon
+                return (
+                  <button
+                    key={prompt.text}
+                    type="button"
+                    className="ai-quick-action"
+                    onClick={() => sendMessage(prompt.text)}
+                  >
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: `${prompt.color}18`,
+                        color: prompt.color,
+                      }}
+                    >
+                      <IconComp size={18} />
+                    </span>
+                    <span className="text-[11px] font-medium leading-tight" style={{ color: 'var(--text-secondary)' }}>
+                      {prompt.text}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         ) : (
-          messages.map((message, index) => (
-            <div key={index} className={`flex ${message.role === 'assistant' ? 'justify-start' : 'justify-end animate-in fade-in slide-in-from-bottom-2'}`}>
-              {message.role === 'assistant' && (
-                <div className="mr-2 mt-1 shrink-0 flex h-7 w-7 items-center justify-center rounded-md border border-(--border) bg-(--text-primary) font-heading text-[10px] font-bold text-(--accent-yellow)">
-                  TS
-                </div>
-              )}
+          /* ── MESSAGE LIST ── */
+          <>
+            {messages.map((message, index) => (
               <div
-                className={`max-w-[88%] rounded-xl px-4 py-3 text-[13.5px] leading-relaxed shadow-sm transition-all ${
-                  message.role === 'assistant'
-                    ? 'bg-(--bg-subtle) border border-(--border) rounded-tl-none text-(--text-primary)'
-                    : 'bg-(--accent-yellow) border-transparent rounded-tr-none text-(--text-on-accent) font-medium'
-                }`}
+                key={index}
+                className={`flex ${message.role === 'assistant' ? 'justify-start' : 'justify-end'}`}
+                style={{
+                  animation: 'chatMsgIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+                  animationDelay: `${Math.min(index * 0.05, 0.3)}s`,
+                }}
               >
-                {message.content}
+                {message.role === 'assistant' && (
+                  <div className="mr-2 mt-1 shrink-0">
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-lg"
+                      style={{
+                        background: 'linear-gradient(135deg, #FFE135, #FFB800)',
+                      }}
+                    >
+                      <Bot size={14} color="#09090B" />
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1" style={{ maxWidth: '85%' }}>
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-[13.5px] leading-relaxed ${
+                      message.role === 'assistant' ? 'rounded-tl-md' : 'rounded-tr-md'
+                    }`}
+                    style={
+                      message.role === 'assistant'
+                        ? {
+                            background: 'var(--bg-subtle)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-primary)',
+                          }
+                        : {
+                            background: 'linear-gradient(135deg, #FFE135, #FFB800)',
+                            color: '#09090B',
+                            fontWeight: 500,
+                          }
+                    }
+                  >
+                    {message.content}
+                  </div>
+                  {message.time && (
+                    <span
+                      className={`text-[10px] px-1 ${message.role === 'assistant' ? '' : 'text-right'}`}
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {message.time}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+            {isSending && <TypingIndicator />}
+          </>
         )}
       </div>
 
-      <div className="border-t border-(--border) bg-(--bg-base) p-3 shrink-0">
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {DEFAULT_PROMPTS.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              className="shrink-0 rounded-md border border-(--border) bg-(--bg-subtle) px-3 py-1.5 text-xs text-(--text-secondary) hover:border-(--border-strong) hover:text-(--text-primary) transition-colors"
-              onClick={() => sendMessage(prompt)}
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
+      {/* Scroll-to-bottom button */}
+      {showScrollBtn && messages.length > 0 && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute left-1/2 -translate-x-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-all"
+          style={{
+            bottom: 140,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <ArrowDown size={14} />
+        </button>
+      )}
 
-        <form onSubmit={onSubmit} className="flex items-end gap-2 px-1">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void sendMessage(input)
-              }
-            }}
-            placeholder="Type a message..."
-            className="min-h-12 w-full resize-none rounded-[10px] border border-(--border) bg-(--bg-card) px-4 py-3 text-[13.5px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--accent-yellow) focus:ring-1 focus:ring-(--accent-yellow)/20 focus:outline-none transition-all shadow-inner"
-            rows={1}
-          />
+      {/* ── INPUT AREA ── */}
+      <div
+        className="shrink-0"
+        style={{
+          borderTop: '1px solid var(--border)',
+          background: 'var(--bg-base)',
+          padding: '12px',
+        }}
+      >
+        {/* Quick prompts row (only show when there are messages) */}
+        {messages.length > 0 && (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {DEFAULT_PROMPTS.map((prompt) => {
+              const IconComp = prompt.icon
+              return (
+                <button
+                  key={prompt.text}
+                  type="button"
+                  className="ai-prompt-chip"
+                  onClick={() => sendMessage(prompt.text)}
+                >
+                  <IconComp size={12} style={{ color: prompt.color }} /> {prompt.text}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <form onSubmit={onSubmit} className="flex items-end gap-2">
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void sendMessage(input)
+                }
+              }}
+              placeholder="Type a message..."
+              className="ai-chat-input"
+              rows={1}
+            />
+          </div>
           <button
             type="submit"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-(--accent-yellow) text-(--text-on-accent) hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+            className="ai-send-btn"
             disabled={isSending || !input.trim()}
           >
-            <Send size={18} />
+            <Send size={16} />
           </button>
         </form>
+
         {requestError && (
-          <div className="mt-2 rounded-md border border-(--border) bg-(--bg-subtle) p-3 flex items-start gap-2">
-            <span className="text-[--warning] mt-px shrink-0"><AlertTriangle size={14} /></span>
+          <div
+            className="mt-3 rounded-xl p-3 flex items-start gap-2.5"
+            style={{
+              background: 'rgba(239, 68, 68, 0.06)',
+              border: '1px solid rgba(239, 68, 68, 0.15)',
+            }}
+          >
+            <span className="mt-px shrink-0" style={{ color: 'var(--danger)' }}>
+              <AlertTriangle size={14} />
+            </span>
             <div className="min-w-0">
-              <p className="text-[12px] font-medium text-(--text-primary)">Career AI is offline</p>
-              <p className="text-[11px] text-(--text-muted) mt-0.5">Start the backend server to enable this feature.</p>
+              <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>Career AI is offline</p>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Start the backend server to enable this feature.</p>
               <button
                 type="button"
                 onClick={() => { setRequestError(''); setMessages([]) }}
-                className="mt-1.5 text-[11px] font-medium text-(--accent-cyan) hover:underline"
+                className="mt-1.5 text-[11px] font-semibold transition-colors"
+                style={{ color: 'var(--accent-cyan)' }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               >
                 Clear &amp; retry →
               </button>

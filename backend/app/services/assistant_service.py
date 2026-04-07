@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 
-from app.services import llm_provider
+from app.schemas.job import JobDescriptionDraftRequest
+from app.services import job_service, llm_provider
 
 
 # ─────────────────────────────────────────────
@@ -54,6 +56,72 @@ OFF_TOPIC_RESPONSE = (
     "- Show my applications\n\n"
     "Ask me anything about your career."
 )
+
+
+def _extract_field(message: str, label: str) -> str | None:
+    pattern = rf"(?:^|\n)\s*(?:-\s*)?{re.escape(label)}\s*:\s*(.+)"
+    match = re.search(pattern, message, flags=re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def _split_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _to_float(raw: str | None) -> float | None:
+    if not raw:
+        return None
+    try:
+        return float(raw.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(raw: str | None) -> int | None:
+    if not raw:
+        return None
+    try:
+        return int(raw.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_structured_jd_prompt(message: str) -> JobDescriptionDraftRequest | None:
+    """Parse a structured JD generation request from free-form chat text."""
+    job_title = _extract_field(message, "Job Title")
+    skills_raw = _extract_field(message, "Required Skills") or _extract_field(message, "Skills Required")
+    location = _extract_field(message, "Location")
+    experience_level = _extract_field(message, "Experience Level")
+    domain = _extract_field(message, "Domain")
+    company = _extract_field(message, "Company Name") or _extract_field(message, "Company")
+    job_type = _extract_field(message, "Job Type")
+
+    if not all([job_title, skills_raw, location, experience_level, domain]):
+        return None
+
+    payload = {
+        "job_title": job_title,
+        "company": company or "Hiring Company",
+        "location": location,
+        "job_type": job_type or "Internship",
+        "required_skills": _split_list(skills_raw),
+        "experience_level": experience_level,
+        "domain": domain,
+        "candidate_skills": _split_list(_extract_field(message, "Candidate skills")),
+        "candidate_experience": _extract_field(message, "Candidate Experience") or _extract_field(message, "Experience"),
+        "candidate_cgpa": _to_float(_extract_field(message, "CGPA")),
+        "candidate_backlogs": _to_int(_extract_field(message, "Backlogs")),
+    }
+
+    try:
+        return JobDescriptionDraftRequest(**payload)
+    except Exception:
+        return None
 
 
 def _is_on_topic(message: str) -> bool:
@@ -170,6 +238,11 @@ async def handle_career_intent(
     history: list[dict],
     profile_context: str = "",
 ) -> str:
+    structured_request = _parse_structured_jd_prompt(message)
+    if structured_request:
+        generated = await job_service.generate_job_description_draft(structured_request)
+        return json.dumps(generated.model_dump(), ensure_ascii=True)
+
     # 1. Check FAQ first (greetings, thanks)
     faq_answer = _match_faq(message)
     if faq_answer:

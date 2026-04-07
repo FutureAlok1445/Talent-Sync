@@ -82,19 +82,37 @@ function AvatarDropdown({ user, role, profileCompletion, onLogout }) {
   const initials = (user?.name || user?.email || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
   const email = user?.email || ''
   const name = user?.name || 'User'
-  const isIncomplete = role === 'STUDENT' && Number(profileCompletion ?? 100) < 100
+  const pct = Number(profileCompletion ?? 100)
+  const isIncomplete = role === 'STUDENT' && pct < 100
 
   return (
     <div className="relative" ref={ref}>
+      {/* Avatar button — shows name + status dot */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 rounded-md border border-(--border) px-2 py-1 transition-colors hover:bg-(--bg-subtle)"
+        className="flex items-center gap-2 rounded-lg border border-(--border) bg-(--bg-subtle) px-2.5 py-1.5 transition-all hover:border-(--text-muted) hover:bg-(--bg-card)"
         aria-label="User menu"
+        aria-expanded={open}
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--accent-yellow) font-heading text-[11px] font-bold text-(--text-on-accent)">
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-full font-bold text-[11px] text-[#1A1A1A] shrink-0"
+          style={{ background: '#F5C542' }}
+        >
           {initials}
         </span>
-        <ChevronDown size={12} className="text-(--text-muted)" />
+        <span className="hidden md:block text-[13px] font-semibold text-(--text-primary) max-w-[80px] truncate">
+          {name.split(' ')[0]}
+        </span>
+        {isIncomplete && (
+          <span
+            className="h-2 w-2 rounded-full shrink-0"
+            style={{ background: '#F5C542', boxShadow: '0 0 0 2px rgba(245,197,66,0.3)' }}
+          />
+        )}
+        <ChevronDown
+          size={13}
+          className={`text-(--text-muted) transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
@@ -205,7 +223,7 @@ export default function AppNavbar({ showBanner, onDismissBanner, profileCompleti
 
   return (
     <div className="sticky top-0 z-20 flex flex-col">
-      <header className="flex h-14 items-center border-b border-(--border) bg-(--bg-base)/80 backdrop-blur-lg px-4 md:px-6">
+      <header className="flex h-16 items-center border-b border-(--border) bg-(--bg-base)/80 backdrop-blur-lg px-4 md:px-6">
         {/* LEFT: Logo area */}
         <div className="flex w-45 shrink-0 items-center">
           <button

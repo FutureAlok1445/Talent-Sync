@@ -32,11 +32,20 @@ export default function ProtectedRoute({ requiredRole, children }) {
     return <Navigate to="/login" replace />
   }
 
+  // New students attempting to access the dashboard are redirected to onboarding
+  // We leave other routes (matches, profile, applications) accessible
+  if (
+    requiredRole &&
+    normalizedRole === 'STUDENT' &&
+    user?.onboardingComplete === false &&
+    location.pathname === '/student/dashboard'
+  ) {
+    return <Navigate to="/student/onboarding" replace />
+  }
+
   if (children) {
     return children
   }
 
   return <Outlet />
 }
-
-// Accessibility check handled: aria-label

@@ -81,6 +81,7 @@ model StudentProfile {
   graduationYear       Int?
   cgpa                 Float?
   location             String?
+  preferredWorkMode    WorkMode?
   linkedinUrl          String?
   githubUrl            String?
   portfolioUrl         String?
