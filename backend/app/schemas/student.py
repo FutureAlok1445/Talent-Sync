@@ -8,9 +8,12 @@ These models are intentionally aligned with both:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+
+WorkModeType = Literal["REMOTE", "HYBRID", "ONSITE"]
 
 
 class UpdateProfileRequest(BaseModel):
@@ -24,6 +27,7 @@ class UpdateProfileRequest(BaseModel):
     graduation_year: int | None = Field(default=None, alias="graduationYear")
     cgpa: float | None = Field(default=None, alias="gpa")
     location: str | None = None
+    preferred_work_mode: WorkModeType | None = Field(default=None, alias="preferredWorkMode")
 
     linkedin_url: str | None = Field(default=None, alias="linkedinUrl")
     github_url: str | None = Field(default=None, alias="githubUrl")
@@ -73,6 +77,7 @@ class StudentProfileResponse(BaseModel):
     # Keep legacy key expected by parts of the frontend.
     gpa: float | None = None
     location: str | None = None
+    preferredWorkMode: str | None = None
     phone: str | None = None
     address: str | None = None
 

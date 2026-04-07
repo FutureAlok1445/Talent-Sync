@@ -52,7 +52,7 @@ async def register(request: Request, req: RegisterRequest):
             },
             include={"studentProfile": True}
         )
-        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name}
+        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name, "onboardingComplete": False}
 
     elif role_enum == "RECRUITER":
         new_user = await prisma.user.create(
@@ -69,7 +69,7 @@ async def register(request: Request, req: RegisterRequest):
             },
             include={"recruiterProfile": True}
         )
-        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name}
+        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name, "onboardingComplete": True}
 
     # Generate tokens
     access_token = create_access_token(user_id=new_user.id)
@@ -107,12 +107,16 @@ async def login(request: Request, req: LoginRequest):
 
     # Extract name based on profile type
     name = "User"
+    onboarding_complete = True
     if user.role == "STUDENT" and user.studentProfile:
         name = user.studentProfile.fullName
+        # Student is onboarded if they have a bio or skills saved
+        sp = user.studentProfile
+        onboarding_complete = bool(sp.bio or sp.college or sp.degree)
     elif user.role == "RECRUITER" and user.recruiterProfile:
         name = user.recruiterProfile.fullName
 
-    user_info = {"id": user.id, "email": user.email, "role": user.role, "name": name}
+    user_info = {"id": user.id, "email": user.email, "role": user.role, "name": name, "onboardingComplete": onboarding_complete}
 
     return TokenResponse(
         access_token=access_token,

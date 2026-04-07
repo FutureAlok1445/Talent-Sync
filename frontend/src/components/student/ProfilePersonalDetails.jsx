@@ -1,4 +1,12 @@
 import { useState } from 'react'
+import { User, Save } from 'lucide-react'
+
+const WORK_MODE_OPTIONS = [
+  { value: '', label: 'Select work mode' },
+  { value: 'REMOTE', label: 'Remote' },
+  { value: 'HYBRID', label: 'Hybrid' },
+  { value: 'ONSITE', label: 'On-site' },
+]
 
 function TagInput({ tags, onChange, placeholder, label }) {
   const [input, setInput] = useState('')
@@ -27,20 +35,20 @@ function TagInput({ tags, onChange, placeholder, label }) {
 
   return (
     <div>
-      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-        {label}
-      </label>
-      <div className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-[6px] border border-(--border) bg-(--bg-base) p-2 transition-colors focus-within:border-(--border-strong)">
+      <label className="profile-label">{label}</label>
+      <div
+        className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg p-2.5 transition-all"
+        style={{
+          border: '1px solid var(--border)',
+          background: 'var(--bg-base)',
+        }}
+      >
         {tags.map((tag, idx) => (
-          <span
-            key={`${tag}-${idx}`}
-            className="inline-flex items-center gap-1 rounded-[4px] border border-(--border) bg-(--bg-subtle) px-2 py-1 text-[12px] font-medium text-(--text-primary)"
-          >
+          <span key={`${tag}-${idx}`} className="profile-tag">
             {tag}
             <button
               type="button"
               onClick={() => removeTag(idx)}
-              className="ml-0.5 text-(--text-muted) hover:text-(--text-primary) transition-colors"
               aria-label={`Remove ${tag}`}
             >
               ×
@@ -54,7 +62,8 @@ function TagInput({ tags, onChange, placeholder, label }) {
           onKeyDown={onKeyDown}
           onBlur={addTag}
           placeholder={tags.length === 0 ? placeholder : 'Type & press Enter'}
-          className="min-w-[120px] flex-1 bg-transparent text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-muted)"
+          className="min-w-[120px] flex-1 bg-transparent text-[13px] outline-none"
+          style={{ color: 'var(--text-primary)' }}
         />
       </div>
     </div>
@@ -71,36 +80,43 @@ export default function ProfilePersonalDetails({
   const update = (key, value) => setPersonal((prev) => ({ ...prev, [key]: value }))
 
   return (
-    <div className="flex flex-col rounded-[8px] border border-(--border) bg-(--bg-card) p-6 transition-colors hover:border-(--border-strong)" id="profile-personal">
-      <div className="mb-6 flex items-center gap-3 border-b border-(--border) pb-4">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-(--accent-yellow) text-[11px] font-bold text-[#09090B]">
-          1
-        </span>
-        <h2 className="font-heading text-base font-bold text-(--text-primary)">Personal Details</h2>
+    <div
+      className="profile-section-card"
+      style={{ '--card-accent': '#FFE135' }}
+      id="profile-personal"
+    >
+      <div className="profile-section-header">
+        <div className="profile-section-icon" style={{ background: 'linear-gradient(135deg, #FFE135, #FFB800)' }}>
+          <User size={18} />
+        </div>
+        <div>
+          <h2 className="font-heading text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+            Personal Details
+          </h2>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Basic information about you
+          </p>
+        </div>
       </div>
 
       <div className="space-y-5">
         <div className="grid gap-5 md:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Full Name
-            </label>
+            <label className="profile-label">Full Name</label>
             <input
               value={personal.fullName}
               onChange={(e) => update('fullName', e.target.value)}
               placeholder="Full name"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Email
-            </label>
+            <label className="profile-label">Email</label>
             <input
               value={personal.email}
               readOnly
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-subtle) px-3 py-2 text-[13px] text-(--text-secondary) cursor-not-allowed opacity-70"
+              className="profile-input"
               title="Email cannot be changed"
             />
           </div>
@@ -108,38 +124,32 @@ export default function ProfilePersonalDetails({
 
         <div className="grid gap-5 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              College
-            </label>
+            <label className="profile-label">College</label>
             <input
               value={personal.college}
               onChange={(e) => update('college', e.target.value)}
               placeholder="College name"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Branch / Degree
-            </label>
+            <label className="profile-label">Branch / Degree</label>
             <input
               value={personal.branch}
               onChange={(e) => update('branch', e.target.value)}
               placeholder="e.g. B.Tech CSE"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              CGPA
-            </label>
+            <label className="profile-label">CGPA</label>
             <input
               value={personal.cgpa}
               onChange={(e) => update('cgpa', e.target.value)}
               placeholder="e.g. 8.5"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
               type="text"
               inputMode="decimal"
             />
@@ -153,6 +163,32 @@ export default function ProfilePersonalDetails({
           placeholder="e.g. Frontend Developer, ML Engineer"
         />
 
+        <div>
+          <label className="profile-label">Preferred Work Mode</label>
+          <div className="relative">
+            <select
+              value={personal.preferredWorkMode || ''}
+              onChange={(e) => update('preferredWorkMode', e.target.value)}
+              className="profile-input appearance-none cursor-pointer"
+            >
+              {WORK_MODE_OPTIONS.map((option) => (
+                <option
+                  key={option.value || 'placeholder'}
+                  value={option.value}
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3" style={{ color: 'var(--text-muted)' }}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
         <TagInput
           label="Skills"
           tags={personal.skills}
@@ -162,55 +198,50 @@ export default function ProfilePersonalDetails({
 
         <div className="grid gap-5 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Phone
-            </label>
+            <label className="profile-label">Phone</label>
             <input
               value={personal.phone}
               onChange={(e) => update('phone', e.target.value)}
               placeholder="Add later"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
               type="tel"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Location
-            </label>
+            <label className="profile-label">Location</label>
             <input
               value={personal.location}
               onChange={(e) => update('location', e.target.value)}
               placeholder="Add later"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-(--text-muted)">
-              Address
-            </label>
+            <label className="profile-label">Address</label>
             <input
               value={personal.address}
               onChange={(e) => update('address', e.target.value)}
               placeholder="Add later"
-              className="w-full rounded-[6px] border border-(--border) bg-(--bg-base) px-3 py-2 text-[13px] text-(--text-primary) placeholder:text-(--text-muted) focus:border-(--border-strong) focus:outline-none transition-colors"
+              className="profile-input"
             />
           </div>
         </div>
       </div>
 
       {error && (
-        <p className="mt-3 text-[12px] font-medium text-(--danger)">{error}</p>
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
 
-      <div className="mt-6 flex justify-end border-t border-(--border) pt-4">
+      <div className="mt-6 flex justify-end pt-4" style={{ borderTop: '1px solid var(--border)' }}>
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="rounded-[6px] bg-(--text-primary) px-4 py-2 font-sans text-[12px] font-medium text-(--bg-base) hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="profile-save-btn"
         >
+          <Save size={14} />
           {saving ? 'Saving…' : 'Save Details'}
         </button>
       </div>

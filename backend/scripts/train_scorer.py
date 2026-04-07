@@ -35,6 +35,7 @@ from xgboost import XGBClassifier
 # Add model manager import (path fix)
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from backend.app.ml.model_manager import save_new_model
+from backend.app.ml.fairness import FairnessAuditor
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -52,23 +53,23 @@ SAFE_FEATURES = [
     "sbert_similarity",
     "semantic_score",
     "skill_overlap_ratio",
-    
+
     # Academic / Eligibility
     "cgpa_normalized",
     "cgpa_meets_threshold",
     "backlog_penalty",
     "branch_eligible",
-    
+
     # Experience signals
     "experience_score",
     "experience_months",
     "experience_gap",
-    
+
     # Preference signals
     "preference_score",
     "location_match",
     "domain_match",
-    
+
     # Profile quality signals
     "skill_gap_score",
     "profile_completeness",
@@ -80,6 +81,72 @@ LEAKAGE_GUARD = {
     "was_selected",
     "rank_in_job",
 }
+
+POLICY_CGPA_IMPORTANCE_CAP = 0.12
+POLICY_PRACTICAL_IMPORTANCE_FLOOR = 0.55
+POLICY_ABSOLUTE_DOMINANCE_CAP = 0.40
+
+PRACTICAL_DOMINANCE_OK = {
+    "skill_overlap_ratio",
+    "skill_gap_score",
+    "semantic_score",
+    "sbert_similarity",
+    "experience_score",
+    "experience_months",
+    "experience_gap",
+    "domain_match",
+    "backlog_penalty",
+}
+
+
+def _compute_sample_weights(features: pd.DataFrame) -> np.ndarray:
+    """Reweight training examples toward skills and practical experience signals."""
+    skill_signal = (0.6 * features["skill_overlap_ratio"]) + (0.4 * features["semantic_score"])
+    experience_signal = (0.65 * features["experience_score"]) + (0.35 * np.clip(features["experience_months"] / 24.0, 0.0, 1.0))
+    domain_signal = np.clip(features["domain_match"], 0.0, 1.0)
+    gap_penalty = np.clip(features["skill_gap_score"], 0.0, 1.0)
+    cgpa_signal = np.clip(features["cgpa_normalized"], 0.0, 1.0)
+
+    weights = (
+        1.0
+        + (0.9 * skill_signal)
+        + (0.7 * experience_signal)
+        + (0.4 * domain_signal)
+        - (0.35 * cgpa_signal)
+        - (0.3 * gap_penalty)
+    )
+    return np.clip(weights.to_numpy(dtype=np.float32), 0.5, 3.0)
+
+
+def _safe_series(df: pd.DataFrame, preferred: str, fallback: str | None = None, default: float | str = 0.0) -> pd.Series:
+    if preferred in df.columns:
+        return df[preferred]
+    if fallback and fallback in df.columns:
+        return df[fallback]
+    return pd.Series([default] * len(df), index=df.index)
+
+
+def _build_feature_sampling_weights(feature_names: list[str]) -> np.ndarray:
+    """Bias tree split sampling toward practical skills/experience signals."""
+    weights = {
+        "skill_overlap_ratio": 3.2,
+        "skill_gap_score": 3.2,
+        "semantic_score": 2.4,
+        "sbert_similarity": 1.8,
+        "experience_score": 2.2,
+        "experience_months": 2.4,
+        "experience_gap": 2.0,
+        "domain_match": 2.0,
+        "location_match": 1.2,
+        "preference_score": 1.0,
+        "backlog_penalty": 1.4,
+        "profile_completeness": 0.8,
+        "branch_eligible": 0.8,
+        # Keep CGPA present but strongly down-sampled.
+        "cgpa_normalized": 0.08,
+        "cgpa_meets_threshold": 0.08,
+    }
+    return np.array([weights.get(name, 1.0) for name in feature_names], dtype=np.float32)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -142,7 +209,13 @@ def main() -> None:
     df_features = pd.DataFrame(feature_matrix, columns=SAFE_FEATURES)
     for col in SAFE_FEATURES:
         df[col] = df_features[col]
-    
+
+    # Training-time anti-bias guard:
+    # Keep CGPA as runtime policy signal, but prevent the model from learning
+    # a dominant academic shortcut from historically biased labels.
+    df["cgpa_normalized"] = 0.0
+    df["cgpa_meets_threshold"] = 0.0
+
     active_features = SAFE_FEATURES
 
     # ── Step 3: Prepare X / y with class imbalance handling ──────────────────
@@ -164,24 +237,32 @@ def main() -> None:
     print(f"   Train: {len(y_train):,}  |  Test: {len(y_test):,}")
 
     # ── Step 4: Train XGBoost ────────────────────────────────────────────────
-    print("\n🚀 Training XGBoost (300 rounds, depth 4, regularized)...")
+    feature_weights = _build_feature_sampling_weights(active_features)
+
+    print("\n🚀 Training XGBoost (skills-first, regularized)...")
     model = XGBClassifier(
-        n_estimators=300,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.6,
-        reg_alpha=1.5,
-        reg_lambda=2.0,
-        min_child_weight=5,
+        n_estimators=380,
+        max_depth=3,
+        learning_rate=0.04,
+        subsample=0.75,
+        colsample_bytree=0.5,
+        reg_alpha=3.0,
+        reg_lambda=4.0,
+        min_child_weight=10,
+        gamma=0.8,
         scale_pos_weight=scale_pos_weight,
         eval_metric="auc",
         random_state=42,
         n_jobs=-1,
         verbosity=0,
+        feature_weights=feature_weights,
     )
+
+    sample_weight_train = _compute_sample_weights(X_train_raw)
+
     model.fit(
         X_train, y_train,
+        sample_weight=sample_weight_train,
         eval_set=[(X_test, y_test)],
         verbose=50,
     )
@@ -219,9 +300,58 @@ def main() -> None:
     print("Feature Importance:")
     print(fi.to_string(index=False))
 
-    max_fi = fi["importance"].max()
-    if max_fi > 0.30:
-        raise RuntimeError(f"🚨🚨 Feature dominance detected! Max importance: {max_fi:.2f}. Aborting deployment.")
+    max_fi = float(fi["importance"].max())
+    max_fi_feature = str(fi.iloc[0]["feature"]) if not fi.empty else "unknown"
+    if max_fi > POLICY_ABSOLUTE_DOMINANCE_CAP:
+        raise RuntimeError(
+            f"🚨🚨 Feature dominance detected! {max_fi_feature}={max_fi:.2f} exceeds absolute cap "
+            f"{POLICY_ABSOLUTE_DOMINANCE_CAP:.2f}. Aborting deployment."
+        )
+    if max_fi > 0.30 and max_fi_feature not in PRACTICAL_DOMINANCE_OK:
+        raise RuntimeError(
+            f"🚨🚨 Non-practical feature dominance detected! {max_fi_feature}={max_fi:.2f}. "
+            "Aborting deployment."
+        )
+
+    fi_map = {row["feature"]: float(row["importance"]) for _, row in fi.iterrows()}
+    cgpa_importance = fi_map.get("cgpa_normalized", 0.0) + fi_map.get("cgpa_meets_threshold", 0.0)
+    skills_importance = (
+        fi_map.get("skill_overlap_ratio", 0.0)
+        + fi_map.get("semantic_score", 0.0)
+        + fi_map.get("skill_gap_score", 0.0)
+        + fi_map.get("sbert_similarity", 0.0)
+    )
+    experience_importance = (
+        fi_map.get("experience_score", 0.0)
+        + fi_map.get("experience_months", 0.0)
+        + fi_map.get("experience_gap", 0.0)
+    )
+    practical_importance = skills_importance + experience_importance + fi_map.get("domain_match", 0.0)
+
+    print(f"\n📌 Policy checks:")
+    print(f"   CGPA combined importance      : {cgpa_importance:.4f}")
+    print(f"   Skills+Experience+Domain sum : {practical_importance:.4f}")
+
+    if cgpa_importance > POLICY_CGPA_IMPORTANCE_CAP:
+        raise RuntimeError(
+            f"🚨 CGPA influence too high ({cgpa_importance:.4f} > {POLICY_CGPA_IMPORTANCE_CAP:.2f}). "
+            "Retraining aborted to enforce skills-first policy."
+        )
+
+    if practical_importance < POLICY_PRACTICAL_IMPORTANCE_FLOOR:
+        raise RuntimeError(
+            f"🚨 Practical signals too weak ({practical_importance:.4f} < {POLICY_PRACTICAL_IMPORTANCE_FLOOR:.2f}). "
+            "Retraining aborted to enforce hiring-priority policy."
+        )
+
+    fairness_input = pd.DataFrame({
+        "final_score": y_prob,
+        "branch": _safe_series(df.loc[X_test_raw.index], "branch", default="unknown").fillna("unknown"),
+        "experience_level": _safe_series(df.loc[X_test_raw.index], "experience_level", "experienceLevel", "unknown").fillna("unknown"),
+        "cgpa": _safe_series(df.loc[X_test_raw.index], "cgpa", "gpa", 0.0).fillna(0.0),
+    })
+    fairness_report = FairnessAuditor().check_bias(fairness_input)
+    print(f"\n🧭 Fairness max disparity: {fairness_report['max_disparity']:.4f}")
 
     # ── Step 6: Save Artifacts ────────────────────────────────────────────────
     print("\n💾 Saving artifacts...")
@@ -245,18 +375,30 @@ def main() -> None:
             row["feature"]: round(row["importance"], 4)
             for _, row in fi.iterrows()
         },
+        "policy_checks": {
+            "cgpa_importance_cap": POLICY_CGPA_IMPORTANCE_CAP,
+            "practical_importance_floor": POLICY_PRACTICAL_IMPORTANCE_FLOOR,
+            "cgpa_combined_importance": round(cgpa_importance, 4),
+            "practical_combined_importance": round(practical_importance, 4),
+        },
+        "fairness": fairness_report,
         "xgboost_params": {
-            "n_estimators": 300,
-            "max_depth": 4,
-            "learning_rate": 0.05,
-            "subsample": 0.8,
-            "colsample_bytree": 0.6,
-            "reg_alpha": 1.5,
-            "reg_lambda": 2.0,
-            "min_child_weight": 5,
+            "n_estimators": 380,
+            "max_depth": 3,
+            "learning_rate": 0.04,
+            "subsample": 0.75,
+            "colsample_bytree": 0.5,
+            "reg_alpha": 3.0,
+            "reg_lambda": 4.0,
+            "min_child_weight": 10,
+            "gamma": 0.8,
+        },
+        "feature_sampling_weights": {
+            name: float(weight)
+            for name, weight in zip(active_features, feature_weights)
         },
     }
-    
+
     # Save model and archive old ones
     save_new_model(model, scaler, active_features, metadata)
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from typing import Any
+from uuid import uuid4
 
 import numpy as np
 
@@ -26,13 +27,51 @@ TOP_N_RETURN = 10   # return top N to API caller
 
 import json
 
+
+_MATCHSCORE_UPSERT_SQL = '''
+INSERT INTO "MatchScore" (
+    "id",
+    "studentId",
+    "jobId",
+    "similarityScore",
+    "ruleScore",
+    "finalScore",
+    "rank",
+    "shapValues",
+    "explanation",
+    "status",
+    "createdAt",
+    "updatedAt"
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS jsonb), $9, CAST($10 AS "MatchStatus"), NOW(), NOW())
+ON CONFLICT ("studentId", "jobId")
+DO UPDATE SET
+    "similarityScore" = EXCLUDED."similarityScore",
+    "ruleScore" = EXCLUDED."ruleScore",
+    "finalScore" = EXCLUDED."finalScore",
+    "rank" = EXCLUDED."rank",
+    "shapValues" = EXCLUDED."shapValues",
+    "explanation" = EXCLUDED."explanation",
+    "updatedAt" = NOW()
+'''
+
 def _text_hash(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
+
+
+def _to_json_text(value: Any) -> str:
+    """Convert objects (including numpy scalars) into JSON text for raw SQL writes."""
+    def _default(obj: Any):
+        if isinstance(obj, np.generic):
+            return obj.item()
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    return json.dumps(value if value is not None else {}, default=_default)
 
 def _profile_hash(student_dict: dict, text: str) -> str:
     # Includes text ensuring semantic integrity + functional metadata integrity
     data = {
-        "text": text, 
+        "text": text,
         "skills": student_dict.get("skills", []),
         "preferred_roles": student_dict.get("preferredRoles", []),
         "cgpa": student_dict.get("cgpa", 0),
@@ -93,6 +132,27 @@ def _job_to_dict(job, job_skills: list[str]) -> dict:
         "workMode": str(job.workMode) if job.workMode else "",
         "eligibleBranches": list(job.eligibleBranches or []),
     }
+
+
+def _is_branch_eligible(student_branch: str | None, eligible_branches: list[str] | set[str] | None) -> bool:
+    """Return True if student branch passes job branch eligibility rules.
+
+    Treats "Any" (case-insensitive) as a wildcard branch.
+    """
+    normalized_allowed = {
+        str(branch or "").strip().lower()
+        for branch in (eligible_branches or [])
+        if str(branch or "").strip()
+    }
+    if not normalized_allowed:
+        return True
+    if "any" in normalized_allowed or "*" in normalized_allowed:
+        return True
+
+    normalized_student_branch = str(student_branch or "").strip().lower()
+    if not normalized_student_branch:
+        return False
+    return normalized_student_branch in normalized_allowed
 
 
 async def _get_student_embedding(
@@ -194,11 +254,8 @@ async def run_matching_for_student(
                 continue
             if int(student_dict["backlogs"]) > 0 and not getattr(job, "backlogAllowed", True):
                 continue
-            if job.eligibleBranches:
-                s_branch = student_dict["branch"].strip().lower()
-                allowed = {b.strip().lower() for b in job.eligibleBranches}
-                if s_branch not in allowed:
-                    continue
+            if not _is_branch_eligible(student_dict.get("branch"), job.eligibleBranches):
+                continue
             eligible_jobs.append(job)
 
         if not eligible_jobs:
@@ -238,20 +295,24 @@ async def run_matching_for_student(
                     "ml_score": 0.0,
                     "shap_values": {},
                     "top_reasons": ["Matched using fallback similarity engine"],
-                    "score_breakdown": {"ml_score": 0.0, "semantic_score": sim},
+                    "score_breakdown": {
+                        "similarity_score": sim,
+                        "ml_score": 0.0,
+                        "final_score": round(sim, 4),
+                    },
                 })
         else:
             # Batch Inference Extraction
             jobs_dicts = [j_dict for _, j_dict, _, _, _ in top_k]
             similarities = [sim for _, _, _, _, sim in top_k]
             final_scores, ml_scores = scorer.score_batch(student_dict, jobs_dicts, similarities)
-            
+
             for i, (j, j_dict, j_skills, j_emb, sim) in enumerate(top_k):
                 final_score = final_scores[i]
-                
+
                 if is_cold_start:
                     final_score = (0.7 * sim) + (0.3 * final_score)
-                
+
                 expl = explainer.explain(student_dict, j_dict, sim)
                 missing = [s for s in j_skills if s.lower() not in [x.lower() for x in skills]]
                 results.append({
@@ -265,7 +326,11 @@ async def run_matching_for_student(
                     "ml_score": ml_scores[i],
                     "shap_values": expl["shap_values"],
                     "top_reasons": expl["top_reasons"],
-                    "score_breakdown": {"ml_score": ml_scores[i], "semantic_score": sim, "final_score": round(final_score, 4)},
+                    "score_breakdown": {
+                        "similarity_score": sim,
+                        "ml_score": ml_scores[i],
+                        "final_score": round(final_score, 4),
+                    },
                 })
 
         # ── Stage 4: MMR Diversity Filter ──
@@ -275,47 +340,37 @@ async def run_matching_for_student(
         while unselected and len(ranked_results) < TOP_N_SAVE:
             best_idx = 0
             best_mmr = -999.0
-            
+
             for i, cand in enumerate(unselected):
                 score = cand["final_score"]
                 penalty = 0.0
                 for r in ranked_results:
                     if cand["job"].companyName == r["job"].companyName:
                         penalty += 0.2
-                
+
                 mmr = 0.8 * score - 0.2 * penalty
                 if mmr > best_mmr:
                     best_mmr = mmr
                     best_idx = i
-            
+
             best_cand = unselected.pop(best_idx)
             ranked_results.append(best_cand)
 
         # Save to DB
         for rank, result in enumerate(ranked_results, 1):
             try:
-                await prisma.matchscore.upsert(
-                    where={"studentId_jobId": {"studentId": profile.id, "jobId": result["job_id"]}},
-                    data={
-                        "create": {
-                            "studentId": profile.id,
-                            "jobId": result["job_id"],
-                            "similarityScore": result["similarity_score"],
-                            "ruleScore": result["ml_score"],
-                            "finalScore": result["final_score"],
-                            "rank": rank,
-                            "shapValues": result.get("shap_values", {}),
-                            "explanation": " | ".join(result.get("top_reasons", [])),
-                        },
-                        "update": {
-                            "similarityScore": result["similarity_score"],
-                            "ruleScore": result["ml_score"],
-                            "finalScore": result["final_score"],
-                            "rank": rank,
-                            "shapValues": result.get("shap_values", {}),
-                            "explanation": " | ".join(result.get("top_reasons", [])),
-                        },
-                    },
+                await prisma.execute_raw(
+                    _MATCHSCORE_UPSERT_SQL,
+                    str(uuid4()),
+                    profile.id,
+                    result["job_id"],
+                    float(result["similarity_score"]),
+                    float(result["ml_score"]),
+                    float(result["final_score"]),
+                    int(rank),
+                    _to_json_text(result.get("shap_values", {})),
+                    " | ".join(result.get("top_reasons", [])),
+                    "PENDING",
                 )
             except Exception:
                 logger.exception("Failed to upsert MatchScore for job %s", result["job_id"])
@@ -362,14 +417,12 @@ async def run_matching_for_job(
         where={"cgpa": {"gte": min_cgpa}},
         include={"studentSkills": {"include": {"skill": True}}},
     )
-    
+
     eligible_profiles = []
     for p in profiles:
         # Exact-token branch check
-        if allowed_branches:
-            s_branch = (p.branch or "").strip().lower()
-            if s_branch not in allowed_branches:
-                continue
+        if not _is_branch_eligible(p.branch, allowed_branches):
+            continue
         eligible_profiles.append(p)
 
     if not eligible_profiles:
@@ -415,4 +468,4 @@ async def run_matching_for_job(
             continue
 
     results.sort(key=lambda x: x["final_score"], reverse=True)
-    return results[:50] # Return top 50 to recruiter
+    return results[:50] # Return top 50 to recruiter

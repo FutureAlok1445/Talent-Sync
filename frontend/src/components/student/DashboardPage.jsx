@@ -436,7 +436,7 @@ function Sidebar({ profile, user, completionData }) {
 
   const steps = [
     { label: "Basic details",   done: !!profile?.fullName },
-    { label: "Skills added",    done: !!(profile?.studentSkills?.length) },
+    { label: "Skills added",    done: !!(profile?.skills?.length || profile?.studentSkills?.length) },
     { label: "Education",       done: !!profile?.degree },
     { label: "Resume uploaded", done: !!profile?.resumeUrl },
     { label: "Bio written",     done: !!profile?.bio },

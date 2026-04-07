@@ -12,6 +12,7 @@ import { matchService } from '../../services/matchService'
 import {
   buildMatchNarrative,
   explainFactor,
+  formatFeatureLabel,
   scoreToPercent,
   strongestShapFactor,
   topShapReasons,
@@ -43,7 +44,7 @@ export default function MatchDetailPage() {
 
   const strongest = strongestShapFactor(match?.shapValues)
   const weakest = weakestShapFactor(match?.shapValues)
-  const topReasons = useMemo(() => topShapReasons(match?.shapValues, 2), [match?.shapValues])
+  const topReasons = useMemo(() => topShapReasons(match?.shapValues, 2, 0.01), [match?.shapValues])
 
   useEffect(() => {
     let active = true
@@ -153,7 +154,7 @@ export default function MatchDetailPage() {
           <div className="stack-dense">
             {topReasons.length ? (
               topReasons.map((reason) => (
-                <p key={reason.feature}>{reason.feature}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}</p>
+                <p key={reason.feature}>{reason.label || formatFeatureLabel(reason.feature)}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}</p>
               ))
             ) : (
               <p>No explainability signals available.</p>
@@ -164,12 +165,12 @@ export default function MatchDetailPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <div className="surface-info text-xs text-ink/85">
             <p className="mb-1 uppercase tracking-wider text-ink">Strongest Factor</p>
-            <p className="font-semibold text-ink">{strongest?.feature || 'N/A'}</p>
+            <p className="font-semibold text-ink">{strongest?.feature ? formatFeatureLabel(strongest.feature) : 'N/A'}</p>
             <p>{explainFactor(strongest)}</p>
           </div>
           <div className="surface-muted text-xs text-ink/85">
             <p className="mb-1 uppercase tracking-wider text-ink">Weakest Factor</p>
-            <p className="font-semibold text-ink">{weakest?.feature || 'N/A'}</p>
+            <p className="font-semibold text-ink">{weakest?.feature ? formatFeatureLabel(weakest.feature) : 'N/A'}</p>
             <p>{explainFactor(weakest)}</p>
           </div>
         </div>

@@ -10,6 +10,9 @@ Register in main.py:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,6 +27,35 @@ from app.services.matching_service import (
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 logger = logging.getLogger(__name__)
+
+_ARTIFACTS_DIR = Path(__file__).resolve().parents[1] / "ml" / "artifacts"
+
+
+def _to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _latest_model_timestamp() -> datetime | None:
+    """Return latest model artifact timestamp for cache invalidation."""
+    metadata_path = _ARTIFACTS_DIR / "model_metadata.json"
+    if metadata_path.exists():
+        try:
+            payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            trained_at = payload.get("trained_at")
+            if trained_at:
+                # Support both naive and timezone-aware ISO values.
+                return _to_utc(datetime.fromisoformat(str(trained_at)))
+        except Exception:
+            logger.exception("Failed to parse model metadata timestamp")
+
+    model_path = _ARTIFACTS_DIR / "scorer_model.pkl"
+    if model_path.exists():
+        return datetime.fromtimestamp(model_path.stat().st_mtime, tz=timezone.utc)
+    return None
 
 
 # ── Student endpoints ─────────────────────────────────────────────────────────
@@ -66,6 +98,22 @@ async def get_my_matches(
         take=limit,
         include={"job": {"include": {"recruiter": True, "jobSkills": {"include": {"skill": True}}}}},
     )
+
+    if cached:
+        model_timestamp = _latest_model_timestamp()
+        latest_cache_timestamp = _to_utc(
+            max((m.updatedAt for m in cached if getattr(m, "updatedAt", None)), default=None)
+        )
+        if model_timestamp and (
+            latest_cache_timestamp is None or latest_cache_timestamp < model_timestamp
+        ):
+            logger.info(
+                "Match cache is stale for student %s (cache=%s, model=%s); refreshing.",
+                profile.id,
+                latest_cache_timestamp,
+                model_timestamp,
+            )
+            return await _run_and_format(user_id, profile, force_refresh=True)
 
     if cached:
         # Build application lookup

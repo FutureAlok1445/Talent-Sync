@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronRight, Filter } from 'lucide-react'
 import { matchService } from '../../services/matchService'
-import { topShapReasons } from '../../utils/formatters'
+import { formatFeatureLabel, topShapReasons } from '../../utils/formatters'
 import EmptyState from '../shared/EmptyState'
 import MatchRing from '../shared/MatchRing'
 import { SkeletonCard } from '../shared/Skeletons'
@@ -20,7 +20,7 @@ function getTopSkills(skills) {
 }
 
 function TableRow({ candidate, index, onViewDetail }) {
-  const topReasons = topShapReasons(candidate.shapValues, 2)
+  const topReasons = topShapReasons(candidate.shapValues, 2, 0.01)
   const skills = getTopSkills(candidate.skills)
 
   return (
@@ -43,7 +43,7 @@ function TableRow({ candidate, index, onViewDetail }) {
           </div>
         </div>
       </td>
-      
+
       <td className="px-4 py-4 align-top">
         <div className="flex flex-wrap gap-1.5 mt-1">
           {skills.length > 0 ? (
@@ -73,12 +73,12 @@ function TableRow({ candidate, index, onViewDetail }) {
         <div className="flex flex-col gap-0.5">
           {topReasons.map((reason) => (
             <span key={`${candidate.id}-${reason.feature}`} className="font-sans text-[11px] text-(--text-muted) truncate">
-              {reason.feature}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}
+              {reason.label || formatFeatureLabel(reason.feature)}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}
             </span>
           ))}
         </div>
       </td>
-      
+
       <td className="px-4 py-4 align-middle text-right pr-6">
         <ChevronRight size={18} className="inline-block text-(--text-muted) transition-colors group-hover:text-(--text-primary)" />
       </td>
