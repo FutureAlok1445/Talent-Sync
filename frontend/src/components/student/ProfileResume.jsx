@@ -1,34 +1,30 @@
-/*
- * WHO WRITES THIS: Frontend developer
- * WHAT THIS DOES: Resume subsection — drag/drop upload area, file info display,
- *                 remove button, Public/Private toggle. Uploads via backend.
- * DEPENDS ON: useProfileForm state
- */
 import { useCallback, useRef, useState } from 'react'
+import { FileText, Upload, X } from 'lucide-react'
 
 const MAX_SIZE = 5 * 1024 * 1024 // 5MB
 
 function VisibilityToggle({ isPublic, onToggle, label }) {
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-xs font-semibold uppercase tracking-wider ${isPublic ? 'text-ink/40' : 'text-ink'}`}>
+      <span
+        className="text-[11px] font-semibold uppercase tracking-widest"
+        style={{ color: isPublic ? 'var(--text-muted)' : 'var(--text-primary)' }}
+      >
         Private
       </span>
       <button
         type="button"
         onClick={onToggle}
-        className={`relative h-7 w-12 shrink-0 rounded-full border-2 border-ink transition-colors ${
-          isPublic ? 'bg-yellow' : 'bg-ink/20'
-        }`}
+        className="profile-toggle"
+        data-active={isPublic ? 'true' : 'false'}
         aria-label={`Toggle ${label} visibility`}
       >
-        <span
-          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full border-2 border-ink bg-white shadow-[1px_1px_0_var(--border)] transition-transform ${
-            isPublic ? 'translate-x-5' : 'translate-x-0'
-          }`}
-        />
+        <span className="toggle-knob" />
       </button>
-      <span className={`text-xs font-semibold uppercase tracking-wider ${isPublic ? 'text-ink' : 'text-ink/40'}`}>
+      <span
+        className="text-[11px] font-semibold uppercase tracking-widest"
+        style={{ color: isPublic ? 'var(--text-primary)' : 'var(--text-muted)' }}
+      >
         Public
       </span>
     </div>
@@ -91,13 +87,24 @@ export default function ProfileResume({
   const onDragLeave = () => setDragOver(false)
 
   return (
-    <div className="card-base" id="profile-resume">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div
+      className="profile-section-card"
+      style={{ '--card-accent': '#22C55E' }}
+      id="profile-resume"
+    >
+      <div className="profile-section-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[3px] border-2 border-ink bg-yellow text-sm font-bold shadow-[2px_2px_0_var(--border)]">
-            4
-          </span>
-          <h2 className="text-xl font-bold text-ink">Resume</h2>
+          <div className="profile-section-icon" style={{ background: 'linear-gradient(135deg, #22C55E, #16A34A)' }}>
+            <Upload size={18} />
+          </div>
+          <div>
+            <h2 className="font-heading text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+              Resume
+            </h2>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              Upload your latest resume
+            </p>
+          </div>
         </div>
         <VisibilityToggle
           isPublic={resumePublic}
@@ -107,16 +114,22 @@ export default function ProfileResume({
       </div>
 
       {resume ? (
-        <div className="flex items-center justify-between rounded-[4px] border-2 border-ink bg-[var(--bg-soft)] p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[3px] border-2 border-ink bg-white text-lg">
-              📄
+        <div className="profile-file-card">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-lg"
+              style={{
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(22, 163, 106, 0.08))',
+                color: 'var(--success)',
+              }}
+            >
+              <FileText size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-ink">
+              <p className="font-sans text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {resume.name || resume.fileName || 'Resume.pdf'}
               </p>
-              <p className="text-xs text-ink/60">
+              <p className="font-sans text-[12px]" style={{ color: 'var(--text-muted)' }}>
                 {formatFileSize(resume.size || resume.fileSize)}
               </p>
             </div>
@@ -125,10 +138,19 @@ export default function ProfileResume({
             type="button"
             onClick={onRemove}
             disabled={saving}
-            className="icon-btn text-red-600 hover:bg-red-50"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)' }}
             aria-label="Remove resume"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+              e.currentTarget.style.color = 'var(--danger)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = 'var(--text-muted)'
+            }}
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
       ) : (
@@ -137,17 +159,17 @@ export default function ProfileResume({
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onClick={() => inputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-[4px] border-2 border-dashed p-10 text-center transition-colors ${
-            dragOver
-              ? 'border-yellow bg-yellow/10'
-              : 'border-ink/40 bg-[var(--bg-soft)] hover:border-ink hover:bg-[var(--bg-soft)]'
-          }`}
+          className={`profile-dropzone ${dragOver ? 'dragging' : ''}`}
         >
-          <span className="mb-2 text-3xl">⬆</span>
-          <p className="text-sm font-semibold text-ink">
+          <span className="dropzone-icon mb-3" style={{ color: 'var(--text-secondary)' }}>
+            <Upload size={28} />
+          </span>
+          <p className="font-sans text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
             Drag & drop your resume or click to browse
           </p>
-          <p className="mt-1 text-xs text-ink/50">PDF only • Max 5MB</p>
+          <p className="mt-1.5 font-sans text-[12px]" style={{ color: 'var(--text-muted)' }}>
+            PDF only • Max 5MB
+          </p>
           <input
             ref={inputRef}
             type="file"
@@ -159,13 +181,13 @@ export default function ProfileResume({
       )}
 
       {(fileError || error) && (
-        <p className="mt-3 text-xs font-medium text-red-600">
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>
           {fileError || error}
         </p>
       )}
 
       {saving && (
-        <p className="mt-3 text-xs font-medium text-ink/60">Uploading…</p>
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--text-muted)' }}>Uploading…</p>
       )}
     </div>
   )

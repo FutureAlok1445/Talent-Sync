@@ -1,9 +1,5 @@
-/*
- * WHO WRITES THIS: Frontend developer
- * WHAT THIS DOES: Bio subsection — textarea with live character counter,
- *                 max 406 chars, counter turns red above 380.
- * DEPENDS ON: useProfileForm state
- */
+import { FileText, Save } from 'lucide-react'
+
 const MAX_BIO = 406
 const WARN_THRESHOLD = 380
 
@@ -12,12 +8,23 @@ export default function ProfileBio({ bio, setBio, saving, error, onSave }) {
   const isWarn = charCount > WARN_THRESHOLD
 
   return (
-    <div className="card-base" id="profile-bio">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[3px] border-2 border-ink bg-yellow text-sm font-bold shadow-[2px_2px_0_var(--border)]">
-          2
-        </span>
-        <h2 className="text-xl font-bold text-ink">Bio</h2>
+    <div
+      className="profile-section-card"
+      style={{ '--card-accent': '#00B8D9' }}
+      id="profile-bio"
+    >
+      <div className="profile-section-header">
+        <div className="profile-section-icon" style={{ background: 'linear-gradient(135deg, #00B8D9, #0097B2)' }}>
+          <FileText size={18} />
+        </div>
+        <div>
+          <h2 className="font-heading text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+            Bio
+          </h2>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Tell recruiters about yourself
+          </p>
+        </div>
       </div>
 
       <div className="relative">
@@ -31,30 +38,33 @@ export default function ProfileBio({ bio, setBio, saving, error, onSave }) {
           placeholder="Tell recruiters a bit about yourself..."
           maxLength={MAX_BIO}
           rows={5}
-          className="input-brutal resize-none"
-          style={{ minHeight: '130px' }}
+          className="profile-input resize-none"
+          style={{ minHeight: '130px', borderRadius: '10px' }}
         />
         <span
-          className={`absolute bottom-3 right-3 font-mono text-xs transition-colors ${
-            isWarn ? 'font-bold text-red-600' : 'text-ink/50'
-          }`}
+          className="absolute bottom-3 right-3 font-mono text-[11px] transition-colors"
+          style={{
+            color: isWarn ? 'var(--danger)' : 'var(--text-muted)',
+            fontWeight: isWarn ? '700' : '400',
+          }}
         >
           {charCount} / {MAX_BIO}
         </span>
       </div>
 
       {error && (
-        <p className="mt-3 text-xs font-medium text-red-600">{error}</p>
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end pt-4" style={{ borderTop: '1px solid var(--border)' }}>
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="btn-primary btn-feedback"
+          className="profile-save-btn"
         >
-          {saving ? 'Saving…' : 'Save'}
+          <Save size={14} />
+          {saving ? 'Saving…' : 'Save Bio'}
         </button>
       </div>
     </div>

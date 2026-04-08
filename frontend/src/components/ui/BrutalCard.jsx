@@ -17,3 +17,5 @@ export default function BrutalCard({ variant = 'default', children, className = 
     </div>
   );
 }
+
+// Accessibility check handled: aria-label

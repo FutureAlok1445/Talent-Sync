@@ -39,6 +39,7 @@ def _get_career_intent_handler():
 #   - Removed COLLECT_NAME (dead code — name comes from auth User table)
 #   - Added COLLECT_COLLEGE (college/university was missing)
 #   - Added COLLECT_CGPA (optional step, user can skip)
+#   - Added COLLECT_WORK_MODE (remote/hybrid/on-site preference)
 #   - Resume upload removed — handled manually on Profile page
 
 ONBOARDING_STEPS = [
@@ -47,6 +48,7 @@ ONBOARDING_STEPS = [
     "COLLECT_EDUCATION",   # degree, branch, graduation year
     "COLLECT_COLLEGE",     # college/university name  ← NEW
     "COLLECT_CGPA",        # optional CGPA            ← NEW
+    "COLLECT_WORK_MODE",   # preferred remote/hybrid/on-site
     "COLLECT_ROLES",
     "COLLECT_EXPERIENCE",
     "CONFIRM_PROFILE",
@@ -55,7 +57,7 @@ ONBOARDING_STEPS = [
 
 STEP_PROMPTS: dict[str, str] = {
     "GREETING": (
-        "👋 Hey {name}! Welcome to TalentSync — your AI-powered career assistant.\n\n"
+        "👋 Hey {name}! Welcome to TalentSync — your onboarding assistant.\n\n"
         "I'll help you set up your profile in just a few steps so we can find "
         "the best-matched jobs for you.\n\n"
         "Let's start! List your technical skills separated by commas.\n"
@@ -78,6 +80,10 @@ STEP_PROMPTS: dict[str, str] = {
         "What is your current CGPA or percentage?\n"
         "_(Type a number like 8.5 or 85%, or type **skip** to skip)_"
     ),
+    "COLLECT_WORK_MODE": (
+        "What kind of work are you looking for?\n\n"
+        "Choose one: **Remote**, **Hybrid**, or **On-site**"
+    ),
     "COLLECT_ROLES": (
         "What kind of roles are you targeting? 🎯\n\n"
         "Share your preferred job roles separated by commas.\n"
@@ -94,6 +100,7 @@ STEP_PROMPTS: dict[str, str] = {
         "🎓 **Education**: {degree} {branch}, {grad_year}\n"
         "🏫 **College**: {college}\n"
         "📊 **CGPA**: {cgpa}\n"
+        "🧭 **Work Mode**: {work_mode}\n"
         "💼 **Preferred Roles**: {roles}\n"
         "⚡ **Experience**: {experience}\n\n"
         "Reply **Yes** to save your profile, or tell me what to change.\n"
@@ -118,6 +125,126 @@ def _next_step(current: str) -> str:
     if idx + 1 < len(ONBOARDING_STEPS):
         return ONBOARDING_STEPS[idx + 1]
     return "COMPLETED"
+
+
+# ─────────────────────────────────────────────
+# LLM-POWERED ONBOARDING RESPONSES
+# ─────────────────────────────────────────────
+
+_ONBOARDING_SYS_PROMPT = (
+    "You are TalentSync AI, a friendly onboarding assistant helping a student "
+    "set up their career profile. Rules:\n"
+    "- Be warm, concise, and encouraging\n"
+    "- Acknowledge what the student just shared before asking the next question\n"
+    "- Ask exactly ONE question per message\n"
+    "- Include helpful examples in your questions\n"
+    "- Use 1-2 emojis max per message\n"
+    "- Keep responses under 80 words\n"
+    "- Stay on-topic — only discuss profile building\n"
+    "- Do NOT use markdown code blocks"
+)
+
+_STEP_LLM_INSTRUCTIONS: dict[str, str] = {
+    "GREETING": (
+        "Welcome {name} to TalentSync. Briefly explain you'll build their career profile "
+        "for better job matches. Ask them to list technical skills (comma-separated). "
+        "Examples: Python, React, SQL, Machine Learning."
+    ),
+    "COLLECT_EDUCATION": (
+        "The student listed these skills: {skills}. Acknowledge them positively. "
+        "Ask about their education: degree, branch/field, and graduation year. "
+        "Example: B.Tech Computer Science, 2026"
+    ),
+    "COLLECT_COLLEGE": (
+        "Acknowledge their education info. Ask which college or university they attend. "
+        "Examples: NIT Surathkal, IIT Bombay, VTU"
+    ),
+    "COLLECT_CGPA": (
+        "Acknowledge their college: {college}. Ask for current CGPA or percentage. "
+        "They can type a number like 8.5 or 85%, or type 'skip' to skip this."
+    ),
+    "COLLECT_WORK_MODE": (
+        "Acknowledge their CGPA. Ask what kind of work mode they prefer. "
+        "They should choose exactly one of: Remote, Hybrid, or On-site."
+    ),
+    "COLLECT_ROLES": (
+        "Acknowledge work mode. Ask what kind of roles they're targeting. "
+        "They should list preferred job roles separated by commas. "
+        "Examples: Data Analyst, ML Engineer, Full-Stack Developer"
+    ),
+    "COLLECT_EXPERIENCE": (
+        "The student wants these roles: {roles}. Acknowledge them. "
+        "Ask about their experience level. "
+        "Options: Fresher, Intern, or Experienced."
+    ),
+    "CONFIRM_PROFILE": (
+        "Show a clean profile summary for the student to review:\n"
+        "Name: {name}, Skills: {skills}, Education: {degree} {branch} {grad_year}, "
+        "College: {college}, CGPA: {cgpa}, Roles: {roles}, Experience: {experience}.\n"
+        "Ask if everything looks correct. Reply 'Yes' to save, or describe what to change."
+    ),
+    "COMPLETED": (
+        "Profile saved! Congratulate the student. Tell them you're now their Career Assistant. "
+        "List what they can ask: show matches, show available jobs, why they matched, "
+        "resume tips, application status. Suggest uploading resume on Profile page."
+    ),
+}
+
+
+def _data_fmt(data: dict[str, Any]) -> dict[str, str]:
+    """Build a format-safe dict from extracted onboarding data."""
+    return {
+        "name": data.get("full_name", "there"),
+        "skills": ", ".join(data.get("skills", [])) or "None listed",
+        "degree": data.get("degree") or data.get("education_raw", "N/A"),
+        "branch": data.get("branch") or "",
+        "grad_year": str(data.get("graduation_year") or "N/A"),
+        "college": data.get("college", "N/A"),
+        "cgpa": str(data.get("cgpa") or "Not provided"),
+        "work_mode": _format_work_mode_label(data.get("preferred_work_mode")),
+        "roles": ", ".join(data.get("preferred_roles", [])) or "None",
+        "experience": data.get("experience_level", "N/A"),
+    }
+
+
+async def _llm_step_response(step_key: str, data: dict[str, Any], user_message: str) -> str:
+    """Generate a natural LLM response for an onboarding step, with static fallback."""
+    instruction = _STEP_LLM_INSTRUCTIONS.get(step_key)
+    if not instruction:
+        return _format_static_prompt(step_key, data)
+
+    fmt = _data_fmt(data)
+    try:
+        instruction = instruction.format(**fmt)
+    except (KeyError, IndexError):
+        pass
+
+    ctx_parts = [f"{k}: {v}" for k, v in fmt.items() if v and v not in ("N/A", "None listed", "Not provided", "there", "")]
+    context = "\n".join(ctx_parts) if ctx_parts else "No data yet."
+
+    prompt = (
+        f"Student data so far:\n{context}\n\n"
+        f"Student's last message: \"{user_message}\"\n\n"
+        f"Your task: {instruction}"
+    )
+
+    try:
+        resp = await llm_provider.generate(prompt=prompt, system_prompt=_ONBOARDING_SYS_PROMPT)
+        if not resp or resp.strip() == llm_provider.FALLBACK_RESPONSE:
+            return _format_static_prompt(step_key, data)
+        return resp
+    except Exception:
+        logger.debug("LLM onboarding failed for step=%s, using static fallback", step_key)
+        return _format_static_prompt(step_key, data)
+
+
+def _format_static_prompt(step_key: str, data: dict[str, Any]) -> str:
+    """Format a static STEP_PROMPTS template as fallback."""
+    template = STEP_PROMPTS.get(step_key, "How can I help you?")
+    try:
+        return template.format(**_data_fmt(data))
+    except (KeyError, IndexError):
+        return template
 
 
 # ─────────────────────────────────────────────
@@ -186,8 +313,8 @@ def _parse_education(text: str) -> dict[str, Any]:
     return result
 
 
-def _parse_cgpa(text: str) -> str | None:
-    """Extract CGPA or percentage from text. Returns None if skipped."""
+def _parse_cgpa(text: str) -> float | None:
+    """Extract CGPA or percentage from text. Returns float or None if skipped."""
     text_lower = text.strip().lower()
     if text_lower in {"skip", "s", "no", "none", "-"}:
         return None
@@ -197,10 +324,38 @@ def _parse_cgpa(text: str) -> str | None:
     if m:
         val = float(m.group(1))
         if val > 10:
-            # Percentage — convert to GPA scale display
-            return f"{val}%"
-        return str(val)
+            # Percentage — convert to 10-point scale for DB storage
+            return round(val / 10.0, 2)
+        return val
     return None
+
+
+def _parse_work_mode(text: str) -> str | None:
+    """Normalize a work-mode preference into the Prisma enum value."""
+    normalized = re.sub(r"\s+", " ", text.strip().lower())
+    if not normalized:
+        return None
+    if "remote" in normalized:
+        return "REMOTE"
+    if "hybrid" in normalized:
+        return "HYBRID"
+    if "onsite" in normalized or "on-site" in normalized or "on site" in normalized:
+        return "ONSITE"
+    return None
+
+
+def _format_work_mode_label(value: Any) -> str:
+    """Render a stored work-mode enum value for user-facing copy."""
+    if not value:
+        return "Not provided"
+    normalized = str(value).upper()
+    if normalized == "ONSITE":
+        return "On-site"
+    if normalized == "REMOTE":
+        return "Remote"
+    if normalized == "HYBRID":
+        return "Hybrid"
+    return str(value)
 
 
 def _parse_skills(text: str) -> list[str]:
@@ -281,6 +436,14 @@ def _apply_edit_to_data(edit_message: str, data: dict[str, Any]) -> tuple[dict[s
             data["cgpa"] = m.group(1)
             return data, f"✅ CGPA updated to: {m.group(1)}\n\nAnything else, or reply **Yes** to save?"
 
+    # Work mode edit
+    if re.search(r"\b(remote|hybrid|onsite|on-site|work mode)\b", msg):
+        work_mode = _parse_work_mode(edit_message)
+        if work_mode:
+            label = "On-site" if work_mode == "ONSITE" else work_mode.title()
+            data["preferred_work_mode"] = work_mode
+            return data, f"✅ Work mode updated to: {label}\n\nAnything else, or reply **Yes** to save?"
+
     # College edit
     if re.search(r"\b(college|university|institute|school)\b", msg):
         m = re.search(r"(?:to|:|=|is)\s*(.+)$", edit_message.strip(), re.IGNORECASE)
@@ -321,7 +484,7 @@ async def handle_onboarding_step(
             name = "there"
 
         data["full_name"] = name
-        response = STEP_PROMPTS["GREETING"].format(name=name)
+        response = await _llm_step_response("GREETING", data, user_message)
         return response, "COLLECT_SKILLS", data, False
 
     if current_step == "COLLECT_SKILLS":
@@ -335,7 +498,8 @@ async def handle_onboarding_step(
                 False,
             )
         data["skills"] = skills
-        return STEP_PROMPTS["COLLECT_EDUCATION"], "COLLECT_EDUCATION", data, False
+        response = await _llm_step_response("COLLECT_EDUCATION", data, user_message)
+        return response, "COLLECT_EDUCATION", data, False
 
     if current_step == "COLLECT_EDUCATION":
         edu = _parse_education(user_message)
@@ -349,7 +513,8 @@ async def handle_onboarding_step(
                 data["branch"] = edu["branch"]
             if edu["graduation_year"]:
                 data["graduation_year"] = edu["graduation_year"]
-        return STEP_PROMPTS["COLLECT_COLLEGE"], "COLLECT_COLLEGE", data, False
+        response = await _llm_step_response("COLLECT_COLLEGE", data, user_message)
+        return response, "COLLECT_COLLEGE", data, False
 
     # NEW: Collect college/university name
     if current_step == "COLLECT_COLLEGE":
@@ -362,7 +527,8 @@ async def handle_onboarding_step(
                 False,
             )
         data["college"] = college
-        return STEP_PROMPTS["COLLECT_CGPA"], "COLLECT_CGPA", data, False
+        response = await _llm_step_response("COLLECT_CGPA", data, user_message)
+        return response, "COLLECT_CGPA", data, False
 
     # NEW: Collect CGPA (optional, skippable)
     if current_step == "COLLECT_CGPA":
@@ -371,7 +537,21 @@ async def handle_onboarding_step(
             data["cgpa"] = cgpa
         else:
             data["cgpa"] = None  # user skipped
-        return STEP_PROMPTS["COLLECT_ROLES"], "COLLECT_ROLES", data, False
+        response = await _llm_step_response("COLLECT_WORK_MODE", data, user_message)
+        return response, "COLLECT_WORK_MODE", data, False
+
+    if current_step == "COLLECT_WORK_MODE":
+        work_mode = _parse_work_mode(user_message)
+        if not work_mode:
+            return (
+                "Please choose one: **Remote**, **Hybrid**, or **On-site**.",
+                current_step,
+                data,
+                False,
+            )
+        data["preferred_work_mode"] = work_mode
+        response = await _llm_step_response("COLLECT_ROLES", data, user_message)
+        return response, "COLLECT_ROLES", data, False
 
     if current_step == "COLLECT_ROLES":
         roles = _parse_roles(user_message)
@@ -384,7 +564,8 @@ async def handle_onboarding_step(
                 False,
             )
         data["preferred_roles"] = roles
-        return STEP_PROMPTS["COLLECT_EXPERIENCE"], "COLLECT_EXPERIENCE", data, False
+        response = await _llm_step_response("COLLECT_EXPERIENCE", data, user_message)
+        return response, "COLLECT_EXPERIENCE", data, False
 
     if current_step == "COLLECT_EXPERIENCE":
         exp = _parse_experience(user_message)
@@ -397,24 +578,8 @@ async def handle_onboarding_step(
             )
         data["experience_level"] = exp
 
-        edu_display = data.get("degree", "")
-        if data.get("branch"):
-            edu_display += f" {data['branch']}"
-        if not edu_display:
-            edu_display = data.get("education_raw", "N/A")
-
-        confirm = STEP_PROMPTS["CONFIRM_PROFILE"].format(
-            name=data.get("full_name", "N/A"),
-            skills=", ".join(data.get("skills", [])) or "None",
-            degree=data.get("degree") or data.get("education_raw", "N/A"),
-            branch=data.get("branch") or "",
-            grad_year=data.get("graduation_year") or "N/A",
-            college=data.get("college", "N/A"),
-            cgpa=data.get("cgpa") or "Not provided",
-            roles=", ".join(data.get("preferred_roles", [])) or "None",
-            experience=data.get("experience_level", "N/A"),
-        )
-        return confirm, "CONFIRM_PROFILE", data, False
+        response = await _llm_step_response("CONFIRM_PROFILE", data, user_message)
+        return response, "CONFIRM_PROFILE", data, False
 
     # FIX: CONFIRM_PROFILE — actually applies edits instead of just returning text
     if current_step == "CONFIRM_PROFILE":
@@ -422,7 +587,8 @@ async def handle_onboarding_step(
             try:
                 await _save_student_profile(user_id, data)
                 profile_saved = True
-                return STEP_PROMPTS["COMPLETED"], "COMPLETED", data, True
+                response = await _llm_step_response("COMPLETED", data, user_message)
+                return response, "COMPLETED", data, True
             except Exception:
                 logger.exception("Failed to save onboarding profile for user %s", user_id)
                 return (
@@ -461,10 +627,15 @@ async def _save_student_profile(user_id: str, data: dict[str, Any]) -> None:
         update_payload["graduationYear"] = data["graduation_year"]
     if data.get("college"):
         update_payload["college"] = data["college"]
-    if data.get("cgpa"):
-        update_payload["cgpa"] = data["cgpa"]
+    if data.get("cgpa") is not None:
+        try:
+            update_payload["cgpa"] = float(str(data["cgpa"]).replace("%", ""))
+        except (ValueError, TypeError):
+            pass
     if data.get("preferred_roles"):
         update_payload["preferredRoles"] = data["preferred_roles"]
+    if data.get("preferred_work_mode"):
+        update_payload["preferredWorkMode"] = data["preferred_work_mode"]
     if data.get("experience_level"):
         update_payload["experienceLevel"] = data["experience_level"]
 
@@ -479,6 +650,7 @@ async def _save_student_profile(user_id: str, data: dict[str, Any]) -> None:
             "fullName": data.get("full_name", ""),
             "preferredRoles": data.get("preferred_roles") or [],
             "preferredLocations": data.get("preferred_locations") or [],
+            "preferredWorkMode": data.get("preferred_work_mode"),
         }
         create_payload.update({k: v for k, v in update_payload.items() if k != "fullName"})
         await prisma.studentprofile.create(data=create_payload)
@@ -758,6 +930,7 @@ async def build_context(user_id: str) -> str:
             f"- CGPA: {getattr(profile, 'cgpa', 'N/A')}\n"
             f"- Graduation: {profile.graduationYear or 'N/A'}\n"
             f"- Skills: {', '.join(skills) if skills else 'None listed'}\n"
+            f"- Preferred Work Mode: {_format_work_mode_label(getattr(profile, 'preferredWorkMode', None))}\n"
             f"- Preferred Roles: {', '.join(profile.preferredRoles) if profile.preferredRoles else 'N/A'}\n"
             f"- Experience: {profile.experienceLevel or 'N/A'}\n"
             f"- Location: {profile.location or 'N/A'}"
@@ -914,6 +1087,7 @@ async def get_or_create_session(
                 bool(profile.graduationYear),
                 bool(profile.college),
                 bool(profile.cgpa),
+                bool(getattr(profile, 'preferredWorkMode', None)),
                 bool(profile.experienceLevel),
                 bool(profile.preferredRoles),
                 bool(profile.studentSkills),

@@ -5,16 +5,18 @@
 #                 POST /auth/logout — stateless, just returns success.
 # DEPENDS ON: auth_service.py, User model, StudentProfile, RecruiterProfile
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
 from app.services.auth_service import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.db.database import prisma
+from app.middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest):
+@limiter.limit("5/minute")
+async def register(request: Request, req: RegisterRequest):
     req.email = req.email.strip().lower()
     # Check if email is already registered
     existing_user = await prisma.user.find_unique(where={"email": req.email})
@@ -50,7 +52,7 @@ async def register(req: RegisterRequest):
             },
             include={"studentProfile": True}
         )
-        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name}
+        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name, "onboardingComplete": False}
 
     elif role_enum == "RECRUITER":
         new_user = await prisma.user.create(
@@ -67,7 +69,7 @@ async def register(req: RegisterRequest):
             },
             include={"recruiterProfile": True}
         )
-        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name}
+        user_info = {"id": new_user.id, "email": new_user.email, "role": new_user.role, "name": req.name, "onboardingComplete": True}
 
     # Generate tokens
     access_token = create_access_token(user_id=new_user.id)
@@ -81,7 +83,8 @@ async def register(req: RegisterRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+@limiter.limit("10/minute")
+async def login(request: Request, req: LoginRequest):
     req.email = req.email.strip().lower()
     user = await prisma.user.find_unique(
         where={"email": req.email},
@@ -104,12 +107,16 @@ async def login(req: LoginRequest):
 
     # Extract name based on profile type
     name = "User"
+    onboarding_complete = True
     if user.role == "STUDENT" and user.studentProfile:
         name = user.studentProfile.fullName
+        # Student is onboarded if they have a bio or skills saved
+        sp = user.studentProfile
+        onboarding_complete = bool(sp.bio or sp.college or sp.degree)
     elif user.role == "RECRUITER" and user.recruiterProfile:
         name = user.recruiterProfile.fullName
 
-    user_info = {"id": user.id, "email": user.email, "role": user.role, "name": name}
+    user_info = {"id": user.id, "email": user.email, "role": user.role, "name": name, "onboardingComplete": onboarding_complete}
 
     return TokenResponse(
         access_token=access_token,
@@ -119,7 +126,8 @@ async def login(req: LoginRequest):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(req: RefreshRequest):
+@limiter.limit("20/minute")
+async def refresh(request: Request, req: RefreshRequest):
     try:
         payload = decode_token(req.refresh_token)
         if payload.get("type") != "refresh":

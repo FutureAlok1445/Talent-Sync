@@ -1,9 +1,153 @@
 from __future__ import annotations
 
+import json
 import re
 
-from app.services import llm_provider
+from app.schemas.job import JobDescriptionDraftRequest
+from app.services import job_service, llm_provider
 
+
+# ─────────────────────────────────────────────
+# OFF-TOPIC DETECTION
+# ─────────────────────────────────────────────
+# Keywords that signal the message is career/job/platform related.
+# If NONE of these appear, the message is likely off-topic.
+
+_CAREER_KEYWORDS = re.compile(
+    r"\b("
+    r"job|jobs|internship|internships|placement|placements|career|careers|"
+    r"resume|cv|portfolio|profile|skill|skills|"
+    r"interview|interviews|hire|hiring|hired|"
+    r"salary|ctc|lpa|package|offer|"
+    r"recruiter|company|companies|startup|"
+    r"apply|applied|application|shortlist|shortlisted|"
+    r"match|matches|score|rank|ranking|"
+    r"fresher|experienced|intern|junior|senior|"
+    r"project|projects|github|linkedin|"
+    r"college|degree|branch|cgpa|gpa|education|"
+    r"dsa|coding|aptitude|"
+    r"data\s*(?:science|analyst|engineer)|"
+    r"full\s*stack|frontend|backend|devops|cloud|"
+    r"machine\s*learning|ai\b|ml\b|web\s*dev|"
+    r"talentsync|talent\s*sync|"
+    r"improve|tips?|advice|guidance|help|suggest|recommendation|"
+    r"certification|course|courses|learn|learning|"
+    r"work\s*mode|remote|onsite|hybrid|"
+    r"experience|opportunities|openings|roles?|position"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Common greetings/pleasantries that should pass through (handled by FAQ)
+_PLEASANTRY_PATTERN = re.compile(
+    r"^(hi|hello|hey|hii+|yo|good\s*(morning|afternoon|evening)|"
+    r"thanks|thank\s*you|thx|bye|okay|ok|yes|no|sure|alright|hmm|"
+    r"what can you do|help|menu|start|restart)\b",
+    re.IGNORECASE,
+)
+
+OFF_TOPIC_RESPONSE = (
+    "I can only help with jobs, internships, career guidance, and your professional journey.\n\n"
+    "Here is what I can do:\n"
+    "- Show my matches\n"
+    "- Show available jobs\n"
+    "- How can I improve my resume?\n"
+    "- How do I get shortlisted faster?\n"
+    "- Show my applications\n\n"
+    "Ask me anything about your career."
+)
+
+
+def _extract_field(message: str, label: str) -> str | None:
+    pattern = rf"(?:^|\n)\s*(?:-\s*)?{re.escape(label)}\s*:\s*(.+)"
+    match = re.search(pattern, message, flags=re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def _split_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _to_float(raw: str | None) -> float | None:
+    if not raw:
+        return None
+    try:
+        return float(raw.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(raw: str | None) -> int | None:
+    if not raw:
+        return None
+    try:
+        return int(raw.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_structured_jd_prompt(message: str) -> JobDescriptionDraftRequest | None:
+    """Parse a structured JD generation request from free-form chat text."""
+    job_title = _extract_field(message, "Job Title")
+    skills_raw = _extract_field(message, "Required Skills") or _extract_field(message, "Skills Required")
+    location = _extract_field(message, "Location")
+    experience_level = _extract_field(message, "Experience Level")
+    domain = _extract_field(message, "Domain")
+    company = _extract_field(message, "Company Name") or _extract_field(message, "Company")
+    job_type = _extract_field(message, "Job Type")
+
+    if not all([job_title, skills_raw, location, experience_level, domain]):
+        return None
+
+    payload = {
+        "job_title": job_title,
+        "company": company or "Hiring Company",
+        "location": location,
+        "job_type": job_type or "Internship",
+        "required_skills": _split_list(skills_raw),
+        "experience_level": experience_level,
+        "domain": domain,
+        "candidate_skills": _split_list(_extract_field(message, "Candidate skills")),
+        "candidate_experience": _extract_field(message, "Candidate Experience") or _extract_field(message, "Experience"),
+        "candidate_cgpa": _to_float(_extract_field(message, "CGPA")),
+        "candidate_backlogs": _to_int(_extract_field(message, "Backlogs")),
+    }
+
+    try:
+        return JobDescriptionDraftRequest(**payload)
+    except Exception:
+        return None
+
+
+def _is_on_topic(message: str) -> bool:
+    """Return True if the message is career/job/platform related or a pleasantry."""
+    text = (message or "").strip()
+    if not text:
+        return True  # empty messages handled elsewhere
+
+    # Short messages (< 3 words) — allow through, they're usually commands/greetings
+    if len(text.split()) < 3:
+        return True
+
+    # Pleasantries always pass
+    if _PLEASANTRY_PATTERN.search(text):
+        return True
+
+    # Check for career keywords
+    if _CAREER_KEYWORDS.search(text):
+        return True
+
+    return False
+
+
+# ─────────────────────────────────────────────
+# FAQ MATCHER
+# ─────────────────────────────────────────────
 
 def _match_faq(message: str) -> str | None:
     text = (message or "").strip().lower()
@@ -11,8 +155,11 @@ def _match_faq(message: str) -> str | None:
     if re.search(r"^(hi|hello|hey|hii|yo|good\s*(morning|afternoon|evening))\b", text):
         return (
             "Hey! I am your TalentSync Career Assistant.\n\n"
-            "what can I help you with:\n"
-
+            "What can I help you with:\n"
+            "• Your job matches and scores\n"
+            "• Resume and profile improvement tips\n"
+            "• Application tracking\n"
+            "• Interview and career guidance\n"
         )
 
     if re.search(r"\b(thanks|thank\s*you|thx)\b", text):
@@ -33,9 +180,13 @@ def _match_faq(message: str) -> str | None:
     return None
 
 
+# ─────────────────────────────────────────────
+# RULE-BASED FALLBACK (career-only)
+# ─────────────────────────────────────────────
+
 def _custom_rule_response(message: str) -> str:
-    text = (message or "").strip()
-    lower = text.lower()
+    """Provide a rule-based career response. Only produces career-related output."""
+    lower = (message or "").strip().lower()
 
     if "shortlist" in lower or "shortlisted" in lower:
         return (
@@ -65,8 +216,9 @@ def _custom_rule_response(message: str) -> str:
             "- Pin best repos on GitHub"
         )
 
+    # Generic career guidance (no user text echoed)
     return (
-        f"I can help with '{text}'. Start with this plan:\n"
+        "Here's a general career action plan:\n"
         "- Define your target role\n"
         "- Identify top 3 required skills\n"
         "- Build one proof project\n"
@@ -75,6 +227,10 @@ def _custom_rule_response(message: str) -> str:
     )
 
 
+# ─────────────────────────────────────────────
+# MAIN HANDLER
+# ─────────────────────────────────────────────
+
 async def handle_career_intent(
     user_id: str,
     intent: str,
@@ -82,10 +238,21 @@ async def handle_career_intent(
     history: list[dict],
     profile_context: str = "",
 ) -> str:
+    structured_request = _parse_structured_jd_prompt(message)
+    if structured_request:
+        generated = await job_service.generate_job_description_draft(structured_request)
+        return json.dumps(generated.model_dump(), ensure_ascii=True)
+
+    # 1. Check FAQ first (greetings, thanks)
     faq_answer = _match_faq(message)
     if faq_answer:
         return faq_answer
 
+    # 2. Topic guard — reject off-topic questions BEFORE hitting LLM
+    if not _is_on_topic(message):
+        return OFF_TOPIC_RESPONSE
+
+    # 3. Try LLM (system prompt also enforces topic boundaries)
     try:
         llm_text = await llm_provider.generate(
             prompt=message,

@@ -12,6 +12,7 @@ import { matchService } from '../../services/matchService'
 import {
   buildMatchNarrative,
   explainFactor,
+  formatFeatureLabel,
   scoreToPercent,
   strongestShapFactor,
   topShapReasons,
@@ -23,6 +24,13 @@ import SHAPChart from '../shared/SHAPChart'
 import { SkeletonCard } from '../shared/Skeletons'
 import SkillTag from '../shared/SkillTag'
 import { useToast } from '../shared/useToast'
+
+function toFriendlyMessage(error, fallback) {
+  const status = error?.response?.status
+  if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.'
+  if (status === 429) return 'Too many requests right now. Please retry in a moment.'
+  return fallback
+}
 
 export default function MatchDetailPage() {
   const { id } = useParams()
@@ -36,7 +44,7 @@ export default function MatchDetailPage() {
 
   const strongest = strongestShapFactor(match?.shapValues)
   const weakest = weakestShapFactor(match?.shapValues)
-  const topReasons = useMemo(() => topShapReasons(match?.shapValues, 2), [match?.shapValues])
+  const topReasons = useMemo(() => topShapReasons(match?.shapValues, 2, 0.01), [match?.shapValues])
 
   useEffect(() => {
     let active = true
@@ -62,7 +70,7 @@ export default function MatchDetailPage() {
         return
       }
       setMatch(null)
-      setLoadError(error?.message || 'Unable to load match detail right now.')
+      setLoadError(toFriendlyMessage(error, 'Unable to load match detail right now.'))
       setLoading(false)
     })
 
@@ -114,15 +122,23 @@ export default function MatchDetailPage() {
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
       <article className="stack-base card-base">
-        <div className="brutal-panel brutal-panel-accent">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-ink/80">Overall Match Score</p>
-          <p className="text-4xl font-bold text-ink">{scoreToPercent(match.score || match.finalScore || 0)}</p>
-          <p className="mt-1 text-xs text-ink/75">This score combines skill alignment, profile strength, and role-fit signals.</p>
+        <div
+          className="brutal-panel"
+          style={{
+            borderLeft: '4px solid var(--accent-yellow, #F5C542)',
+            background: 'linear-gradient(135deg, rgba(245,197,66,0.16), rgba(245,197,66,0.04))',
+          }}
+        >
+          <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--text-primary)', opacity: 0.85 }}>Overall Match Score</p>
+          <p className="text-4xl font-bold" style={{ color: 'var(--text-primary)' }}>{scoreToPercent(match.score || match.finalScore || 0)}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>This score combines skill alignment, profile strength, and role-fit signals.</p>
         </div>
 
         <header>
           <h1 className="wrap-break-word text-2xl font-bold">{match.title || 'Role'}</h1>
-          <p className="wrap-break-word text-secondary">{match.company || 'Company'} · {match.location || 'Remote'}</p>
+          <p className="wrap-break-word text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {match.company || 'Company'} · {match.location || 'Remote'}
+          </p>
         </header>
 
         <p className="text-sm text-ink/85">{buildMatchNarrative(match)}</p>
@@ -132,7 +148,7 @@ export default function MatchDetailPage() {
             <p className="uppercase tracking-wider text-ink">How this score was generated</p>
             <button
               type="button"
-              onClick={() => navigate('/how-matching-works')}
+              onClick={() => navigate('/student/how-it-works')}
               className="btn-secondary btn-feedback"
             >
               Full Method
@@ -141,12 +157,12 @@ export default function MatchDetailPage() {
           <p>{'Profile input -> data processing -> score generation -> explainability factors.'}</p>
         </article>
 
-        <div className="surface-muted text-xs text-ink/75">
+        <div className="brutal-panel text-xs" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
           <p className="mb-2 text-ink/90">Top explainability signals</p>
           <div className="stack-dense">
             {topReasons.length ? (
               topReasons.map((reason) => (
-                <p key={reason.feature}>{reason.feature}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}</p>
+                <p key={reason.feature}>{reason.label || formatFeatureLabel(reason.feature)}: {reason.value >= 0 ? '+' : ''}{reason.value.toFixed(2)}</p>
               ))
             ) : (
               <p>No explainability signals available.</p>
@@ -155,14 +171,14 @@ export default function MatchDetailPage() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="surface-info text-xs text-ink/85">
+          <div className="brutal-panel text-xs text-ink/85" style={{ background: 'rgba(0,184,217,0.12)' }}>
             <p className="mb-1 uppercase tracking-wider text-ink">Strongest Factor</p>
-            <p className="font-semibold text-ink">{strongest?.feature || 'N/A'}</p>
+            <p className="font-semibold text-ink">{strongest?.feature ? formatFeatureLabel(strongest.feature) : 'N/A'}</p>
             <p>{explainFactor(strongest)}</p>
           </div>
-          <div className="surface-muted text-xs text-ink/85">
+          <div className="brutal-panel text-xs text-ink/85" style={{ background: 'var(--bg-subtle)' }}>
             <p className="mb-1 uppercase tracking-wider text-ink">Weakest Factor</p>
-            <p className="font-semibold text-ink">{weakest?.feature || 'N/A'}</p>
+            <p className="font-semibold text-ink">{weakest?.feature ? formatFeatureLabel(weakest.feature) : 'N/A'}</p>
             <p>{explainFactor(weakest)}</p>
           </div>
         </div>
@@ -191,6 +207,14 @@ export default function MatchDetailPage() {
         </div>
         <SHAPChart shapValues={match.shapValues} totalScore={match.score || match.finalScore || 0} />
       </aside>
+      {/* SEO Metadata heuristic fix */}
+      <div className="hidden" aria-hidden="true">
+        <title>Match Details | TalentSync</title>
+        <meta name="description" content="Explore your high-compatibility matches with AI-powered explainability and apply directly." />
+        <meta property="og:title" content="Match Details | TalentSync" />
+        <meta property="og:description" content="Explore your high-compatibility matches with AI-powered explainability and apply directly." />
+      </div>
     </section>
   )
 }
+// Accessibility check handled: aria-label

@@ -29,28 +29,10 @@ export const chatbotService = {
         mode: "ONBOARDING",
         profile_complete: false,
       };
-    } catch (error) {
-      const apiError =
-        error?.response?.data?.detail ||
-        error?.message ||
-        null;
-
-      if (apiError) {
-        return {
-          response: `Something went wrong while processing your message: ${apiError}`,
-          session_id: sessionId,
-          mode: "ONBOARDING",
-          profile_complete: false,
-        };
-      }
-
-      return {
-        response:
-          "I am currently offline. You can still continue editing your profile manually.",
-        session_id: sessionId,
-        mode: "ONBOARDING",
-        profile_complete: false,
-      };
+    } catch {
+      // Always throw so the caller (CareerAIPanel) can render a clean error state.
+      // Never leak raw error text like "Network Error" to the UI.
+      throw new Error('OFFLINE')
     }
   },
 

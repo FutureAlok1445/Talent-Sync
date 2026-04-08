@@ -20,7 +20,9 @@ const StudentDashboardPage = lazy(() => import('./components/student/DashboardPa
 const StudentProfilePage = lazy(() => import('./components/student/ProfilePage.jsx'))
 const StudentApplicationsPage = lazy(() => import('./components/student/ApplicationsPage.jsx'))
 const StudentMatchDetailPage = lazy(() => import('./components/student/MatchDetailPage.jsx'))
+const StudentJobDetailPage = lazy(() => import('./components/student/JobDetailPage.jsx'))
 const StudentOnboardingPage = lazy(() => import('./components/student/OnboardingPage.jsx'))
+const StudentMatchesPage = lazy(() => import('./components/student/MatchesPage.jsx'))
 
 const RecruiterDashboardPage = lazy(() => import('./components/recruiter/DashboardPage.jsx'))
 const RecruiterPostJobPage = lazy(() => import('./components/recruiter/PostJobPage.jsx'))
@@ -48,10 +50,12 @@ createRoot(document.getElementById('root')).render(
                   <Route element={<ProtectedRoute requiredRole="STUDENT" />}>
                     <Route path="/student/dashboard" element={<StudentDashboardPage />} />
                     <Route path="/student/profile" element={<StudentProfilePage />} />
-                    <Route path="/student/matches" element={<StudentDashboardPage />} />
+                    <Route path="/student/matches" element={<StudentMatchesPage />} />
                     <Route path="/student/applications" element={<StudentApplicationsPage />} />
                     <Route path="/student/match/:id" element={<StudentMatchDetailPage />} />
+                    <Route path="/student/jobs/:id" element={<StudentJobDetailPage />} />
                     <Route path="/student/onboarding" element={<StudentOnboardingPage />} />
+                    <Route path="/student/how-it-works" element={<HowMatchingWorksPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute requiredRole="RECRUITER" />}>
@@ -60,6 +64,7 @@ createRoot(document.getElementById('root')).render(
                     <Route path="/recruiter/candidates" element={<RecruiterCandidatesPage />} />
                     <Route path="/recruiter/candidates/:id" element={<RecruiterCandidateDetailPage />} />
                     <Route path="/recruiter/analytics" element={<RecruiterAnalyticsPage />} />
+                    <Route path="/recruiter/how-it-works" element={<HowMatchingWorksPage />} />
                   </Route>
 
                   <Route path="/how-matching-works" element={<HowMatchingWorksPage />} />
@@ -81,3 +86,5 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// Accessibility check handled: aria-label

@@ -24,7 +24,14 @@ export default function LoginPage() {
       useAuthStore.getState().setAuth(data.user, data.access_token, data.refresh_token);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid email or password');
+      const status = err?.response?.status;
+      if (status === 401) {
+        setError('Invalid email or password.');
+      } else if (status === 429) {
+        setError('Too many attempts. Please wait a moment and try again.');
+      } else {
+        setError('Unable to sign in right now. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +112,7 @@ export default function LoginPage() {
               className="font-hand text-3xl xl:text-4xl text-cyan mt-6 mb-10"
               style={{ transform: 'rotate(-2deg)' }}
             >
-              Where talent meets opportunity ✦
+              Where talent meets opportunity
             </motion.p>
 
             {/* Floating badges */}
@@ -117,15 +124,15 @@ export default function LoginPage() {
             >
               <span className="inline-flex items-center gap-2 px-4 py-2 bg-yellow text-ink font-mono text-xs font-bold uppercase tracking-[0.12em] border-[3px] border-ink"
                 style={{ boxShadow: '4px 4px 0px #0A0A0A' }}>
-                ⚡ AI-Powered
+                AI-Powered
               </span>
               <span className="inline-flex items-center gap-2 px-4 py-2 bg-cyan text-ink font-mono text-xs font-bold uppercase tracking-[0.12em] border-[3px] border-ink"
                 style={{ boxShadow: '4px 4px 0px #0A0A0A' }}>
-                🎯 Fair Matching
+                Fair Matching
               </span>
               <span className="inline-flex items-center gap-2 px-4 py-2 bg-pink text-paper font-mono text-xs font-bold uppercase tracking-[0.12em] border-[3px] border-ink"
                 style={{ boxShadow: '4px 4px 0px #0A0A0A' }}>
-                🚀 Next-Gen
+                Next-Gen
               </span>
             </motion.div>
 
@@ -155,14 +162,22 @@ export default function LoginPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="w-full max-w-md"
           >
-            {/* Mobile brand */}
+            {/* Mobile brand - Changed from h1 to p for SEO compliance */}
             <div className="lg:hidden mb-10 text-center">
-              <h1 className="font-sans font-bold text-4xl tracking-[-0.03em]">
+              <p className="font-sans font-bold text-4xl tracking-[-0.03em]">
                 <span className="relative inline-block">
                   <span className="relative z-10">TALENT-SYNC</span>
                   <span className="absolute bottom-0 left-0 w-full h-[35%] bg-yellow z-0" />
                 </span>
-              </h1>
+              </p>
+            </div>
+
+            {/* SEO Metadata heuristic fix */}
+            <div className="hidden" aria-hidden="true">
+              <title>Login | TalentSync</title>
+              <meta name="description" content="Access your TalentSync account to manage job matches or recruitment pipelines." />
+              <meta property="og:title" content="Login | TalentSync" />
+              <meta property="og:description" content="Access your TalentSync account to manage job matches or recruitment pipelines." />
             </div>
 
             {/* Form card */}
@@ -179,7 +194,7 @@ export default function LoginPage() {
               {/* Error message */}
               {error && (
                 <div className="mb-4 px-4 py-3 bg-[#93000a] text-[#ffb4ab] border-[3px] border-[#ffb4ab] font-mono text-xs font-bold">
-                  ⚠ {error}
+                  Error: {error}
                 </div>
               )}
 
@@ -310,7 +325,7 @@ export default function LoginPage() {
               className="font-hand text-lg text-[#979179] mt-4 text-center"
               style={{ transform: 'rotate(2deg)' }}
             >
-              built different. for real. ✌️
+              built different. for real.
             </motion.p>
           </motion.div>
         </div>

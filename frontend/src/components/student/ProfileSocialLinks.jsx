@@ -1,10 +1,5 @@
-/*
- * WHO WRITES THIS: Frontend developer
- * WHAT THIS DOES: Social Links subsection — first input always visible,
- *                 '+' button adds more (max 6), '×' removes, URL validation on blur.
- * DEPENDS ON: useProfileForm state
- */
 import { useState } from 'react'
+import { Link2, Plus, X, Save } from 'lucide-react'
 
 const MAX_LINKS = 6
 
@@ -56,12 +51,23 @@ export default function ProfileSocialLinks({
   }
 
   return (
-    <div className="card-base" id="profile-social-links">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[3px] border-2 border-ink bg-yellow text-sm font-bold shadow-[2px_2px_0_var(--border)]">
-          3
-        </span>
-        <h2 className="text-xl font-bold text-ink">Social Links</h2>
+    <div
+      className="profile-section-card"
+      style={{ '--card-accent': '#A855F7' }}
+      id="profile-social-links"
+    >
+      <div className="profile-section-header">
+        <div className="profile-section-icon" style={{ background: 'linear-gradient(135deg, #A855F7, #9333EA)' }}>
+          <Link2 size={18} />
+        </div>
+        <div>
+          <h2 className="font-heading text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+            Social Links
+          </h2>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Connect your online presence
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -77,22 +83,31 @@ export default function ProfileSocialLinks({
                     ? 'https://linkedin.com/in/...'
                     : 'https://github.com/...'
                 }
-                className="input-brutal flex-1"
+                className="profile-input flex-1"
                 type="url"
               />
               {idx > 0 && (
                 <button
                   type="button"
                   onClick={() => removeLink(idx)}
-                  className="icon-btn shrink-0 text-red-600 hover:bg-red-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
                   aria-label="Remove link"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                    e.currentTarget.style.color = 'var(--danger)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = 'var(--text-muted)'
+                  }}
                 >
-                  ×
+                  <X size={16} />
                 </button>
               )}
             </div>
             {linkErrors[idx] && (
-              <p className="mt-1 text-xs text-red-600">{linkErrors[idx]}</p>
+              <p className="mt-1.5 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{linkErrors[idx]}</p>
             )}
           </div>
         ))}
@@ -102,24 +117,39 @@ export default function ProfileSocialLinks({
         <button
           type="button"
           onClick={addLink}
-          className="mt-4 inline-flex items-center gap-1 rounded-[3px] border-2 border-yellow bg-transparent px-4 py-2 text-xs font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-yellow/20"
+          className="mt-4 flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all"
+          style={{
+            color: 'var(--text-secondary)',
+            border: '1px dashed var(--border)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-yellow)'
+            e.currentTarget.style.color = 'var(--text-primary)'
+            e.currentTarget.style.background = 'rgba(255, 225, 53, 0.05)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border)'
+            e.currentTarget.style.color = 'var(--text-secondary)'
+            e.currentTarget.style.background = 'transparent'
+          }}
         >
-          <span className="text-base leading-none">+</span> Add Link
+          <Plus size={14} /> Add Link
         </button>
       )}
 
       {error && (
-        <p className="mt-3 text-xs font-medium text-red-600">{error}</p>
+        <p className="mt-3 text-[12px] font-medium" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end pt-4" style={{ borderTop: '1px solid var(--border)' }}>
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="btn-primary btn-feedback"
+          className="profile-save-btn"
         >
-          {saving ? 'Saving…' : 'Save'}
+          <Save size={14} />
+          {saving ? 'Saving…' : 'Save Links'}
         </button>
       </div>
     </div>

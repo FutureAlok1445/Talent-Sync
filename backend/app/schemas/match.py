@@ -1,17 +1,50 @@
-# WHO WRITES THIS: Backend developer / ML developer
-# WHAT THIS DOES: Response shape for match score data including SHAP values.
-# DEPENDS ON: pydantic
+"""
+backend/app/schemas/match.py
+Pydantic schemas for match API responses.
+"""
 
-from pydantic import BaseModel
-from typing import Optional
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class ScoreBreakdown(BaseModel):
+    similarity_score: float
+    ml_score: float
+    final_score: float
+
+
 class MatchResponse(BaseModel):
-    id: int
-    student_id: int
-    job_id: int
-    hybrid_score: float
-    semantic_score: float
-    academic_score: float
-    preference_score: float
-    shap_values: Optional[dict] = None
-    class Config:
-        from_attributes = True
+    job_id: str
+    job_title: str
+    company: str
+    location: str | None
+    work_mode: str | None
+    job_type: str | None
+    salary_min: int | None
+    salary_max: int | None
+    required_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    similarity_score: float
+    ml_score: float
+    final_score: float
+    top_reasons: list[str]
+    shap_values: dict
+    score_breakdown: ScoreBreakdown
+    applied: bool = False
+    rank: int | None = None
+
+
+class CandidateMatchResponse(BaseModel):
+    """Used by recruiter to see ranked students for a job."""
+    student_id: str
+    student_name: str
+    final_score: float
+    similarity_score: float
+    top_reasons: list[str]
+    shap_values: dict
+    skills: list[str] = Field(default_factory=list)
+    email: str | None = None
+    phone: str | None = None
+    branch: str | None = None
+    cgpa: float | None = None

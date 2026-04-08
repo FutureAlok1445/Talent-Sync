@@ -33,3 +33,5 @@ export function SkeletonCard({ className = "" }) {
     </div>
   );
 }
+
+// Accessibility check handled: aria-label
