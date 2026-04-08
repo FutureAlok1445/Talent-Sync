@@ -688,7 +688,7 @@ export default function StudentDashboard() {
 
       const [profileRes, matchRes, appsRes] = await Promise.allSettled([
         profileService.getMyProfile(),
-        matchService.getMyMatches(50),
+        force ? matchService.refreshMyMatches(50) : matchService.getMyMatches(50),
         applicationService.getMyApplications(),
       ]);
 
